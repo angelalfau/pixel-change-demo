@@ -1,5 +1,9 @@
 import cv2
 import os
+from PIL import Image
+from PIL.ExifTags import TAGS
+import flirimageextractor
+from matplotlib import cm
 
 # each item in images will be stored as tuple (image_file, filename)
 # so that we remember filename for future use
@@ -60,11 +64,37 @@ def check_differences(image1, image2):
                 diff_pixels.append((i, j))
     return diff_pixels
 
+def extract_metadata(image_path):
+    flir = flirimageextractor.FlirImageExtractor(palettes=[cm.jet, cm.bwr, cm.gist_ncar])
+    # flir.process_image(image_path)
+    flir.process_image('orig-images/Iron.jpg')
+    flir.save_images()
+    flir.plot()
+
+    # image = Image.open(image_path)
+    # exifdata = image.getexif()
+    # print(exifdata)
+    # for tag_id in exifdata:
+    # # get the tag name, instead of human unreadable tag id
+    #     tag = TAGS.get(tag_id, tag_id)
+    #     data = exifdata.get(tag_id)
+    #     # decode bytes 
+    #     if isinstance(data, bytes):
+    #         data = data.decode()
+    #     print(f"{tag:25}: {data}")
+    return
+
+'''
 orig_images = load_images_from_folder("orig-images")
 alter_images(orig_images)
-
 
 iron_image = cv2.imread(os.path.join("orig-images", "Iron.jpg"))
 iron_altered_image = cv2.imread(os.path.join("altered-images", "Iron-altered.jpg"))
 # print(iron_image)
 print(check_differences(iron_image, iron_altered_image))
+'''
+
+# rb_image = cv2.imread(os.path.join("orig-images", "Rainbow.jpg"))
+# exifdata = rb_image.getexif()
+
+extract_metadata(os.path.join("orig-images", "Rainbow.jpg"))
