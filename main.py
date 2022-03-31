@@ -119,6 +119,8 @@ def pixel_selector(image_path):
             finished = True
     print(image[0][0])
     cv2.destroyAllWindows()
+    return
+
 
 '''
 orig_images = load_images_from_folder("orig-images")
@@ -130,9 +132,51 @@ iron_altered_image = cv2.imread(os.path.join("altered-images", "Iron-altered.jpg
 print(check_differences(iron_image, iron_altered_image))
 '''
 
+def rgb2ycbcr(img):
+    filename, extension = img[1].split('.')
+    img = img[0]
+    ycbcr_img = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
+    
+    def mouse_callback(event,x,y,flags,param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            print(x, y)
+            # print(image[0:100][0:100])
+            # image[y][x] = [255, 255, 255]
+            for i in range(-5, 6):
+                for j in range(-5, 6):
+                    ycbcr_img[y+i][x+j] = [255, 255, 255]
+            # print(image[y][x])
+        return
+
+    rows, cols = sizeof(ycbcr_img)
+    cv2.namedWindow('image',cv2.WINDOW_NORMAL) # Can be resized
+    cv2.resizeWindow('image', cols, rows) #Reasonable size window
+    cv2.setMouseCallback('image', mouse_callback) #Mouse callback
+
+    finished = False
+    while(not finished):
+        # cv2.imshow('image',img)
+        cv2.imshow('ycbcr_image',ycbcr_img)
+        k = cv2.waitKey(4) & 0xFF
+        if k == 27:
+            finished = True
+    
+    # print(filename, extension)
+    
+    new_filename = filename + "-ycbcr." + extension
+    # print(new_filename)
+    cv2.imwrite(os.path.join("ycbcr-images", new_filename), ycbcr_img)
+    return ycbcr_img
+
 # rb_metadata = extract_metadata(os.path.join("orig-images", "Rainbow.jpg"))
 # print(rb_metadata)
 
 # print(convert_img(os.path.join("orig-images", "Rainbow.jpg")))
 
-pixel_selector(os.path.join("orig-images", "Rainbow.jpg"))
+# pixel_selector(os.path.join("orig-images", "Rainbow.jpg"))
+
+orig_img_array = load_images_from_folder("orig-images")
+
+for img in orig_img_array:
+    rgb2ycbcr(img)
+# rgb2ycbcr(os.path.join("orig-images", "Rainbow.jpg"))
