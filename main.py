@@ -8,6 +8,7 @@ import matplotlib.image as mpimg
 import flir_image_extractor
 import subprocess
 import json
+import numpy as np
 
 # TODO: convert entire to OOP
 # TODO: notebook
@@ -144,14 +145,15 @@ def rgb2ycbcr(img):
             # image[y][x] = [255, 255, 255]
             for i in range(-5, 6):
                 for j in range(-5, 6):
-                    ycbcr_img[y+i][x+j] = [255, 255, 255]
+                    # ycbcr_img[y+i][x+j] = [255, 255, 255]
+                    ycbcr_img[y+i][x+j][0] = 255
             # print(image[y][x])
         return
 
     rows, cols = sizeof(ycbcr_img)
-    cv2.namedWindow('image',cv2.WINDOW_NORMAL) # Can be resized
-    cv2.resizeWindow('image', cols, rows) #Reasonable size window
-    cv2.setMouseCallback('image', mouse_callback) #Mouse callback
+    cv2.namedWindow('ycbcr_image',cv2.WINDOW_NORMAL) # Can be resized
+    cv2.resizeWindow('ycbcr_image', cols, rows) #Reasonable size window
+    cv2.setMouseCallback('ycbcr_image', mouse_callback) #Mouse callback
 
     finished = False
     while(not finished):
@@ -166,17 +168,61 @@ def rgb2ycbcr(img):
     new_filename = filename + "-ycbcr." + extension
     # print(new_filename)
     cv2.imwrite(os.path.join("ycbcr-images", new_filename), ycbcr_img)
+    print(ycbcr_img[0][0])
     return ycbcr_img
+
+def rgb2ycbcr2(img):
+    filename, extension = img[1].split('.')
+    img = img[0]
+    xform = np.array([[.299, .587, .114], [-.1687, -.3313, .5], [.5, -.4187, -.0813]])
+    ycbcr_img = img.dot(xform.T)
+    ycbcr_img[:,:,[1,2]] += 128
+    norm_img = cv2.normalize(ycbcr_img, np.zeros((800,800)), 0, 1, cv2.NORM_MINMAX)
+    
+    rows, cols = sizeof(norm_img)
+    def mouse_callback(event,x,y,flags,param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            print(x, y)
+            # print(image[0:100][0:100])
+            # image[y][x] = [255, 255, 255]
+            for i in range(-5, 6):
+                for j in range(-5, 6):
+                    norm_img[y+i][x+j][0] = 255
+                    ycbcr_img[y+i][x+j][0] = 255
+            # print(image[y][x])
+        return
+
+    cv2.namedWindow('ycbcr_image',cv2.WINDOW_NORMAL) # Can be resized
+    cv2.resizeWindow('ycbcr_image', cols, rows) #Reasonable size window
+    cv2.setMouseCallback('ycbcr_image', mouse_callback) #Mouse callback
+    #TODO change back to false
+    finished = False
+    while(not finished):
+        cv2.imshow('ycbcr_image', norm_img)
+        k = cv2.waitKey(4) & 0xFF
+        if k == 27:
+            finished = True
+    
+    new_filename = filename + "-ycbcr." + extension
+    # print(new_filename)
+    cv2.imwrite(os.path.join("ycbcr-images", new_filename), ycbcr_img)
+    print(ycbcr_img[0][0])
+    return np.uint8(ycbcr_img)
 
 # rb_metadata = extract_metadata(os.path.join("orig-images", "Rainbow.jpg"))
 # print(rb_metadata)
+
+# wh_metadata = extract_metadata(os.path.join("orig-images", "Auto_WhiteHot.jpg"))
+# print(wh_metadata)
 
 # print(convert_img(os.path.join("orig-images", "Rainbow.jpg")))
 
 # pixel_selector(os.path.join("orig-images", "Rainbow.jpg"))
 
 orig_img_array = load_images_from_folder("orig-images")
-
 for img in orig_img_array:
-    rgb2ycbcr(img)
+    rgb2ycbcr2(img)
 # rgb2ycbcr(os.path.join("orig-images", "Rainbow.jpg"))
+
+# autoWhiteHot = cv2.imread(os.path.join("orig-images", "Auto_WhiteHot.jpg"))
+# print(autoWhiteHot[0][0])
