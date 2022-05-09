@@ -240,8 +240,18 @@ class FlirImageExtractor:
             print("DEBUG Saving RGB image to:{}".format(image_filename))
             print("DEBUG Saving Thermal image to:{}".format(thermal_filename))
 
+        print(thermal_filename)
         img_visual.save(image_filename)
         img_thermal.save(thermal_filename)
+
+    def get_thermal(self):
+        thermal_np = self.extract_thermal_image()
+        thermal_normalized = (thermal_np - np.amin(thermal_np)) / (np.amax(thermal_np) - np.amin(thermal_np))
+        img_thermal = Image.fromarray(np.uint8(cm.inferno(thermal_normalized) * 255))
+        filename = self.flir_img_filename.split('\\')[-1]
+        filename, extension = filename.split('.')
+        img_thermal.save("/".join(["thermal-images", "".join([filename, "-thermal.png"])]))
+        return img_thermal
 
     def export_thermal_to_csv(self, csv_filename):
         """
