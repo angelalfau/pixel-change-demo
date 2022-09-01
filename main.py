@@ -25,55 +25,9 @@ def load_images_from_folder(folder):
     return images
 
 
-# pass in array of image data files (each file is array of pixels)
-# only used for jpg files!!!
-# creates white square in middle of image
-# and saves to altered-images folder
-# --> goal: to learn how to alter images and save data files back to images
-# after altering images, metadata is lost ==> maybe find way to read or save metadata
-def alter_images(orig_images):
-    for orig_image in orig_images:
-        filename, extension = orig_image[1].split('.')
-        image = orig_image[0]
-        print("currently reading: ", filename, ".", extension, sep="")
-        rows = len(image)
-        cols = len(image[0])
-        print("image is size: ", cols, "x", rows)
-
-        if extension != 'jpg':
-            print("unexpected file extension: ", extension)
-
-        N = 1 # was prev rows//2
-        M = 1 # was prev cols//2
-        center_i = rows // 2
-        center_j = cols // 2
-        for i in range(-N, N):
-            for j in range(-M, M):
-                print("altering pixel at: ", center_i + i, center_j + j)
-                image[center_i + i][center_j + j] = [255, 255, 255]
-        
-        new_filename = filename + "-altered." + extension
-        cv2.imwrite(os.path.join("altered-images", new_filename), image)
-
-
 # returns rows by cols in a tuple
 def sizeof(array):
     return (len(array), len(array[0]))
-
-
-# given two images, will find and print pixels that are diff by certain amt
-def check_differences(image1, image2):
-    if sizeof(image1) != sizeof(image2):
-        print("images are of different size")
-        return []
-    diff_pixels = []
-    for i in range(len(image1)):
-        for j in range(len(image1[0])):
-            # print(image1[i][j], image2[i][j])
-            difference = abs(sum(image1[i][j]) - sum(image2[i][j]))
-            if difference > 200:
-                diff_pixels.append((i, j))
-    return diff_pixels
 
 
 # for now, converts any thermal image to digital and normalized thermal image
@@ -93,6 +47,7 @@ def extract_metadata(image_path):
             ['exiftool', '-j', image_path])
     meta = json.loads(meta_json.decode())[0]
     return meta
+
 
 # takes in image path, and loads up an editor window
 # where you can alter the image
@@ -130,13 +85,13 @@ def pixel_selector(image_path):
     else:
         prev_condition, scale, colorspace = filename.split('_')
 
-    new_condition = input("enter new condition: ")
-    # new_condition = "test"
+    # new_condition = input("enter new condition: ")
+    new_condition = "test"
     if colorspace:
         new_filename = new_condition + "_" + scale + "_" + colorspace + '.' + extension
     else:
         new_filename = new_condition + '_' + scale + '.' + extension
-    cv2.imwrite(image_path + '\\' + new_filename, image)
+    # cv2.imwrite(image_path + '\\' + new_filename, image)
     return
 
 
@@ -155,43 +110,6 @@ def bgr2ycrcb(image_path):
     new_filename = filename + "_ycrcb." + extension
     cv2.imwrite(os.path.join("YCRCB-Reference-Images", new_filename), ycrcb_img)
     return
-
-def rgb2ycbcr2(img):
-    filename, extension = img[1].split('.')
-    img = img[0]
-    xform = np.array([[.299, .587, .114], [-.1687, -.3313, .5], [.5, -.4187, -.0813]])
-    ycbcr_img = img.dot(xform.T)
-    ycbcr_img[:,:,[1,2]] += 128
-    norm_img = cv2.normalize(ycbcr_img, np.zeros((800,800)), 0, 1, cv2.NORM_MINMAX)
-    
-    rows, cols = sizeof(norm_img)
-    def mouse_callback(event,x,y,flags,param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            print(x, y)
-            # print(image[0:100][0:100])
-            # image[y][x] = [255, 255, 255]
-            for i in range(-5, 6):
-                for j in range(-5, 6):
-                    norm_img[y+i][x+j][0] = 255
-                    ycbcr_img[y+i][x+j][0] = 255
-            # print(image[y][x])
-        return
-
-    cv2.namedWindow('ycbcr_image',cv2.WINDOW_NORMAL) # Can be resized
-    cv2.resizeWindow('ycbcr_image', cols, rows) #Reasonable size window
-    cv2.setMouseCallback('ycbcr_image', mouse_callback) #Mouse callback
-    finished = False
-    while(not finished):
-        cv2.imshow('ycbcr_image', norm_img)
-        k = cv2.waitKey(4) & 0xFF
-        if k == 27:
-            finished = True
-    
-    new_filename = filename + "-ycbcr." + extension
-    # print(new_filename)
-    cv2.imwrite(os.path.join("ycbcr-images", new_filename), ycbcr_img)
-    print(ycbcr_img[0][0])
-    return np.uint8(ycbcr_img)
 
 
 # gets min pixel value, max pixel value, and minstep btwn pixels
@@ -264,33 +182,22 @@ def ycrcb2y(image_path):
     filename = image_path.split('\\')[-1]
     filename, extension = filename.split('.')
     condition, scale = filename.split('_')[:2]
-    image = cv2.imread(image_path)
-    # image = img[:,:,0]
+    img = cv2.imread(image_path)
+    Y_image = img[:,:,0]
 
-    rows, cols = sizeof(image)
-    def mouse_callback(event,x,y,flags,param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            print("value at position: ", x, y, "is: ", image[y][x])
-            # for i in range(-5, 6):
-            #     for j in range(-5, 6):
-            #         image[y+i][x+j] = [255, 100, 100]
-        return
-    cv2.namedWindow('image', cv2.WINDOW_NORMAL) # Can be resized
-    cv2.setMouseCallback('image', mouse_callback) #Mouse callback
-    cv2.resizeWindow('image', cols, rows) #Reasonable size window
-    finished = False
-    while(not finished):
-        cv2.imshow('image', image)
-        k = cv2.waitKey(4) & 0xFF
-        if k == 27:
-            finished = True
-    cv2.destroyAllWindows()
+    cv2.imwrite(os.path.join("Y-Reference-Images", condition + '_' + scale + "_Y." + extension), Y_image)
     return
 
 if __name__ == "__main__":
-    # pixel_selector(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
     # for filename in os.listdir("Reference-Images"):
     #     bgr2ycrcb(os.path.join("Reference-images", filename))
-    pixel_selector(os.path.join("YCRCB-Reference-Images", "Heavy_27-52_ycrcb.jpg"))
-    # ycrcb2y(os.path.join("YCRCB-Reference-Images", "Heavy_27-52_ycrcb.jpg"))
+
+    for filepath in os.listdir('YCRCB-Reference-Images'):
+        ycrcb2y(os.path.join("YCRCB-Reference-Images", filepath))
+
+    # pixel_selector(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
+    # pixel_selector(os.path.join("YCRCB-Reference-Images", "Heavy_27-52_ycrcb.jpg"))
+    # pixel_selector(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
+    #convert_img(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
+    # print(extract_metadata(os.path.join("Reference-Images", "Heavy_27-52.jpg")))
     pass
