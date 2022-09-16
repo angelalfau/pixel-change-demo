@@ -188,16 +188,104 @@ def ycrcb2y(image_path):
     cv2.imwrite(os.path.join("Y-Reference-Images", condition + '_' + scale + "_Y." + extension), Y_image)
     return
 
+def histogram_equalize(image_path):
+    img = cv2.imread(image_path)
+
+    filename = image_path.split('\\')[-1]
+    filename, extension = filename.split('.')
+    new_filename = filename + "_equalized." + extension
+
+    hist,bins = np.histogram(img.flatten(),256,[0,256])
+
+    cdf = hist.cumsum()
+    cdf_normalized = cdf * hist.max()/ cdf.max()
+
+    cdf_m = np.ma.masked_equal(cdf,0)
+    cdf_m = (cdf_m - cdf_m.min())*255/(cdf_m.max()-cdf_m.min())
+    cdf = np.ma.filled(cdf_m,0).astype('uint8')
+
+    equalized_img = cdf[img]
+
+    cv2.imwrite(os.path.join("post-equalize", new_filename), equalized_img)
+
+    print("saved equalized image to: ", os.path.join("post-equalize", new_filename))
+
+    plt.plot(cdf_normalized, color = 'b')
+    plt.hist(img.flatten(),256,[0,256], color = 'r')
+    plt.xlim([0,256])
+    plt.legend(('cdf','histogram'), loc = 'upper left')
+    plt.title(filename)
+    plt.show()
+
+def registration(img1, img2, img1_color):
+    width, height = sizeof(img1)
+    # Create ORB detector with 5000 features.
+    orb_detector = cv2.ORB_create(5000)
+    
+    # Find keypoints and descriptors.
+    # The first arg is the image, second arg is the mask
+    #  (which is not required in this case).
+    kp1, d1 = orb_detector.detectAndCompute(img1, None)
+    kp2, d2 = orb_detector.detectAndCompute(img2, None)
+    
+    # Match features between the two images.
+    # We create a Brute Force matcher with
+    # Hamming distance as measurement mode.
+    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck = True)
+    
+    # Match the two sets of descriptors.
+    matches = list(matcher.match(d1, d2))
+
+    # Sort matches on the basis of their Hamming distance.
+    matches.sort(key = lambda x: x.distance)
+    
+    # Take the top 90 % matches forward.
+    matches = matches[:int(len(matches)*0.9)]
+    no_of_matches = len(matches)
+    
+    # Define empty matrices of shape no_of_matches * 2.
+    p1 = np.zeros((no_of_matches, 2))
+    p2 = np.zeros((no_of_matches, 2))
+    
+    for i in range(len(matches)):
+        p1[i, :] = kp1[matches[i].queryIdx].pt
+        p2[i, :] = kp2[matches[i].trainIdx].pt
+    
+    # Find the homography matrix.
+    homography, mask = cv2.findHomography(p1, p2, cv2.RANSAC)
+    
+    # Use this matrix to transform the
+    # colored image wrt the reference image.
+    transformed_img = cv2.warpPerspective(img1_color,
+                        homography, (width, height))
+    
+    # Save the output.
+    return transformed_img
+    # cv2.imwrite(os.path.join('output.jpg'), transformed_img)
+
 if __name__ == "__main__":
     # for filename in os.listdir("Reference-Images"):
     #     bgr2ycrcb(os.path.join("Reference-images", filename))
-
-    for filepath in os.listdir('YCRCB-Reference-Images'):
-        ycrcb2y(os.path.join("YCRCB-Reference-Images", filepath))
+    # print(os.listdir("Reference-Images"))
+    # for filepath in os.listdir('YCRCB-Reference-Images'):
+    #     ycrcb2y(os.path.join("YCRCB-Reference-Images", filepath))
 
     # pixel_selector(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
     # pixel_selector(os.path.join("YCRCB-Reference-Images", "Heavy_27-52_ycrcb.jpg"))
     # pixel_selector(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
     #convert_img(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
     # print(extract_metadata(os.path.join("Reference-Images", "Heavy_27-52.jpg")))
+
+    # histogram_equalize(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
+    # histogram_equalize(os.path.join("Y-Reference-Images", "Normal_27-52_Y.jpg"))
+
+    img1 = cv2.imread(os.path.join("post-equalize", "Heavy_27-52_Y_equalized.jpg"))
+    img1_color = cv2.imread(os.path.join("Reference-Images", "Normal_27-52.jpg"))
+    img2 = cv2.imread(os.path.join("post-equalize", "Normal_27-52_Y_equalized.jpg"))
+    registered_img = registration(img1, img2, img1_color)
+    cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y_equalized.jpg"), registered_img)
+    img1 = cv2.imread(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
+    img2 = cv2.imread(os.path.join("Y-Reference-Images", "Normal_27-52_Y.jpg"))
+    registered_img = registration(img1, img2, img1_color)
+    cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y.jpg"), registered_img)
     pass
