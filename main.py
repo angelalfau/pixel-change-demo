@@ -218,7 +218,7 @@ def histogram_equalize(image_path):
     plt.show()
 
 def registration(img1, img2, img1_color):
-    width, height = sizeof(img1)
+    height, width = sizeof(img1)
     # Create ORB detector with 5000 features.
     orb_detector = cv2.ORB_create(5000)
     
@@ -258,7 +258,7 @@ def registration(img1, img2, img1_color):
     # colored image wrt the reference image.
     transformed_img = cv2.warpPerspective(img1_color,
                         homography, (width, height))
-    
+
     # Save the output.
     return transformed_img
     # cv2.imwrite(os.path.join('output.jpg'), transformed_img)
@@ -280,12 +280,37 @@ if __name__ == "__main__":
     # histogram_equalize(os.path.join("Y-Reference-Images", "Normal_27-52_Y.jpg"))
 
     img1 = cv2.imread(os.path.join("post-equalize", "Heavy_27-52_Y_equalized.jpg"))
-    img1_color = cv2.imread(os.path.join("Reference-Images", "Normal_27-52.jpg"))
+    img1_color = cv2.imread(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
     img2 = cv2.imread(os.path.join("post-equalize", "Normal_27-52_Y_equalized.jpg"))
     registered_img = registration(img1, img2, img1_color)
-    cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y_equalized.jpg"), registered_img)
-    img1 = cv2.imread(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
-    img2 = cv2.imread(os.path.join("Y-Reference-Images", "Normal_27-52_Y.jpg"))
-    registered_img = registration(img1, img2, img1_color)
-    cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y.jpg"), registered_img)
+    cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y_equalized_heavy_nowidth.jpg"), registered_img)
+    # img1 = cv2.imread(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
+    # img2 = cv2.imread(os.path.join("Y-Reference-Images", "Normal_27-52_Y.jpg"))
+    # registered_img = registration(img1, img2, img1_color)
+    # cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y_heavy.jpg"), registered_img)
+
+    # img_blur = cv2.imread(os.path.join("post-registration", "Heavy+Normal_27-52_Y_heavy.jpg"))
+    # img2_blur = cv2.imread(os.path.join("post-registration", "Heavy+Normal_27-52_Y.jpg"))
+    # # Canny Edge Detection
+    # edges = cv2.Canny(image=img_blur, threshold1=100, threshold2=200) # Canny Edge Detection
+    # edges2 = cv2.Canny(image=img2_blur, threshold1=100, threshold2=200) # Canny Edge Detection
+
+    # cv2.imwrite(os.path.join("post-canny", "Heavy+Normal_27-52_Y_heavy_canny.jpg"), edges)
+    # cv2.imwrite(os.path.join("post-canny", "Heavy+Normal_27-52_Y_canny.jpg"), edges2)
+
+    # Display Canny Edge Detection Image
+    # cv2.imshow('Canny Edge Detection', edges)
+    # cv2.imshow('Canny Edge Detection', edges2)
+    # cv2.waitKey(0)
+
+
     pass
+
+
+# TODO:
+# if retaking image, remember offset and possibly rotation degree
+# and note offset/rotation in filename
+# 1. how much offset can be corrected
+# 2. how much rotation can be corrected
+# 3. need absolute value or not of the difference?
+# 4. how to crop equalized image
