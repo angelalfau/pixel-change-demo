@@ -1,0 +1,7 @@
+# TODO:
+# if retaking image, remember offset and possibly rotation degree
+# and note offset/rotation in filename
+# 1. how much offset can be corrected
+# 2. how much rotation can be corrected
+# 3. need absolute value or not of the difference?
+# 4. how to crop equalized image
