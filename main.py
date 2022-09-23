@@ -109,7 +109,7 @@ def bgr2ycrcb(image_path):
     
     new_filename = filename + "_ycrcb." + extension
     cv2.imwrite(os.path.join("YCRCB-Reference-Images", new_filename), ycrcb_img)
-    return ycrcb_img
+    return
 
 
 # gets min pixel value, max pixel value, and minstep btwn pixels
@@ -186,7 +186,7 @@ def ycrcb2y(image_path):
     Y_image = img[:,:,0]
 
     cv2.imwrite(os.path.join("Y-Reference-Images", condition + '_' + scale + "_Y." + extension), Y_image)
-    return Y_image
+    return
 
 def histogram_equalize(image_path):
     img = cv2.imread(image_path)
@@ -264,16 +264,11 @@ def registration(img1, img2, img1_color):
     # cv2.imwrite(os.path.join('output.jpg'), transformed_img)
 
 if __name__ == "__main__":
-    #for filename in os.listdir("Reference-Images"):
-         #bgr2ycrcb(os.path.join("Reference-images", filename))
-    #print(os.listdir("Reference-Images"))
+    # for filename in os.listdir("Reference-Images"):
+    #     bgr2ycrcb(os.path.join("Reference-images", filename))
+    # print(os.listdir("Reference-Images"))
     # for filepath in os.listdir('YCRCB-Reference-Images'):
     #     ycrcb2y(os.path.join("YCRCB-Reference-Images", filepath))
-
-    #for filename in os.listdir("Training-Images"):
-         #bgr2ycrcb(os.path.join("Training-images", filename))
-    #for filepath in os.listdir('YCRCB-Reference-Images'):
-         #ycrcb2y(os.path.join("YCRCB-Reference-Images", filepath))
 
     # pixel_selector(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
     # pixel_selector(os.path.join("YCRCB-Reference-Images", "Heavy_27-52_ycrcb.jpg"))
@@ -284,15 +279,11 @@ if __name__ == "__main__":
     # histogram_equalize(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
     # histogram_equalize(os.path.join("Y-Reference-Images", "Normal_27-52_Y.jpg"))
 
-    img1 = cv2.imread(os.path.join("Training-Images", "rotation1.jpg"))
-    y_img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2YCrCb)[:,:,0]
-    img1_color = cv2.imread(os.path.join("Training-Images", "rotation1.jpg"))
-    img2 = cv2.imread(os.path.join("Training-Images", "rotation2.jpg"))
-    y_img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2YCrCb)[:,:,0]
-    #img1 = ycrcb2y(bgr2ycrcb(img1))
-    #img2 = ycrcb2y(bgr2ycrcb(img2))
+    img1 = cv2.imread(os.path.join("post-equalize", "Heavy_27-52_Y_equalized.jpg"))
+    img1_color = cv2.imread(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
+    img2 = cv2.imread(os.path.join("post-equalize", "Normal_27-52_Y_equalized.jpg"))
     registered_img = registration(img1, img2, img1_color)
-    cv2.imwrite(os.path.join("post-registration", "rotation_final.jpg"), registered_img)
+    cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y_equalized_heavy_nowidth.jpg"), registered_img)
     # img1 = cv2.imread(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
     # img2 = cv2.imread(os.path.join("Y-Reference-Images", "Normal_27-52_Y.jpg"))
     # registered_img = registration(img1, img2, img1_color)
@@ -314,3 +305,12 @@ if __name__ == "__main__":
 
 
     pass
+
+
+# TODO:
+# if retaking image, remember offset and possibly rotation degree
+# and note offset/rotation in filename
+# 1. how much offset can be corrected
+# 2. how much rotation can be corrected
+# 3. need absolute value or not of the difference?
+# 4. how to crop equalized image
