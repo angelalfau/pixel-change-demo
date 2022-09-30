@@ -1,3 +1,4 @@
+from lzma import FILTER_LZMA1
 import cv2
 import os
 from PIL import Image
@@ -162,21 +163,10 @@ def find_stats(dir_path):
 
 
 # for now, crops left and top of image to remove scale and FLIR label
-def crop_image():
-    images = []
-    folder = "to-be-cropped"
-    for filename in os.listdir(folder):
-        img = cv2.imread(os.path.join(folder,filename))
-        if img is not None:
-            images.append((img, filename))
-    for img in images:
-        unpacked_filename = img[1].split('.')
-        filename, extension = ".".join(unpacked_filename[:-1]), unpacked_filename[-1]
-        img = img[0]
-        rows, cols = sizeof(img)
-        cropped_img = img[56:rows, 88:cols]
-        cv2.imwrite(os.path.join("cropped-images", filename + "-cropped." + extension), cropped_img)
-    return
+def crop_image(img):
+    rows, cols = sizeof(img)
+    cropped_img = img[56:rows, :]
+    return cropped_img
 
 def ycrcb2y(image_path):
     filename = image_path.split('\\')[-1]
@@ -264,50 +254,39 @@ def registration(img1, img2, img1_color):
     # cv2.imwrite(os.path.join('output.jpg'), transformed_img)
 
 if __name__ == "__main__":
-    # for filename in os.listdir("Reference-Images"):
-    #     bgr2ycrcb(os.path.join("Reference-images", filename))
-    # print(os.listdir("Reference-Images"))
-    # for filepath in os.listdir('YCRCB-Reference-Images'):
-    #     ycrcb2y(os.path.join("YCRCB-Reference-Images", filepath))
 
-    # pixel_selector(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
-    # pixel_selector(os.path.join("YCRCB-Reference-Images", "Heavy_27-52_ycrcb.jpg"))
-    # pixel_selector(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
-    #convert_img(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
-    # print(extract_metadata(os.path.join("Reference-Images", "Heavy_27-52.jpg")))
+    for filename in os.listdir("reference-images"):
+        bgr2ycrcb(os.path.join("reference-images", filename))
+        ycrcb2y(os.path.join("ycrcb-reference-images", filename[:-4] + "_ycrcb.jpg"))
 
-    # histogram_equalize(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
-    # histogram_equalize(os.path.join("Y-Reference-Images", "Normal_27-52_Y.jpg"))
-
-    img1 = cv2.imread(os.path.join("post-equalize", "Heavy_27-52_Y_equalized.jpg"))
-    img1_color = cv2.imread(os.path.join("Reference-Images", "Heavy_27-52.jpg"))
-    img2 = cv2.imread(os.path.join("post-equalize", "Normal_27-52_Y_equalized.jpg"))
-    registered_img = registration(img1, img2, img1_color)
-    cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y_equalized_heavy_nowidth.jpg"), registered_img)
-    # img1 = cv2.imread(os.path.join("Y-Reference-Images", "Heavy_27-52_Y.jpg"))
-    # img2 = cv2.imread(os.path.join("Y-Reference-Images", "Normal_27-52_Y.jpg"))
-    # registered_img = registration(img1, img2, img1_color)
-    # cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y_heavy.jpg"), registered_img)
-
-    # img_blur = cv2.imread(os.path.join("post-registration", "Heavy+Normal_27-52_Y_heavy.jpg"))
-    # img2_blur = cv2.imread(os.path.join("post-registration", "Heavy+Normal_27-52_Y.jpg"))
-    # # Canny Edge Detection
-    # edges = cv2.Canny(image=img_blur, threshold1=100, threshold2=200) # Canny Edge Detection
-    # edges2 = cv2.Canny(image=img2_blur, threshold1=100, threshold2=200) # Canny Edge Detection
-
-    # cv2.imwrite(os.path.join("post-canny", "Heavy+Normal_27-52_Y_heavy_canny.jpg"), edges)
-    # cv2.imwrite(os.path.join("post-canny", "Heavy+Normal_27-52_Y_canny.jpg"), edges2)
-
-    # Display Canny Edge Detection Image
-    # cv2.imshow('Canny Edge Detection', edges)
-    # cv2.imshow('Canny Edge Detection', edges2)
-    # cv2.waitKey(0)
-
-
+    # folder_name = "rotation-images"
+    # filename_1 = "NormRotateRight3_27-52.jpg"
+    # filename_2 = "NormStraight_27-52.jpg"
+    # img1_color = cv2.imread(os.path.join(folder_name, filename_1))
+    # img2_color = cv2.imread(os.path.join(folder_name, filename_2))
+    # img1_y = cv2.cvtColor(img1_color, cv2.COLOR_BGR2YCrCb)[:,:,0]
+    # img2_y = cv2.cvtColor(img2_color, cv2.COLOR_BGR2YCrCb)[:,:,0]
+    # registered_img = registration(img1_y, img2_y, img1_color)
+    # # cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y_equalized_heavy_nowidth.jpg"), registered_img)
+    # finished = False
+    # while(not finished):
+    #     cv2.imshow('registered rotations', np.hstack([img1_color, img2_color, registered_img]))
+    #     k = cv2.waitKey(4) & 0xFF
+    #     if k == 27:
+    #         finished = True
     pass
 
 
 # TODO:
+# tweak params of registration
+# breakpoints on registration
+# smaller rotations for registration
+# use heavy as reference
+# take new pics with higher scales (low++ high++) do multiple scales for each
+# manually create hot spots, changing luminance in 4x4 6x6 etc. keep changing
+# When can we see difference? how much temp diff is +10 luminance, do several steps
+# goal is to see difference in 1 pixel with 1 luminance change
+
 # if retaking image, remember offset and possibly rotation degree
 # and note offset/rotation in filename
 # 1. how much offset can be corrected
