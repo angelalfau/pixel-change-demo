@@ -11,6 +11,9 @@ import subprocess
 import json
 import numpy as np
 
+from scipy import ndimage
+from PIL import Image
+
 # TODO: convert entire to OOP
 # TODO: notebook
 
@@ -57,10 +60,10 @@ def extract_metadata(image_path):
 def pixel_selector(image_path):
     def mouse_callback(event,x,y,flags,param):
         if event == cv2.EVENT_LBUTTONDOWN:
-            print("value at position: ", x, y, "is: ", image[y][x])
-            # for i in range(-5, 6):
-            #     for j in range(-5, 6):
-            #         image[y+i][x+j] = [255, 100, 100]
+            # print("value at position: ", x, y, "is: ", image[y][x])
+            for i in range(-5, 6):
+                for j in range(-5, 6):
+                    image[y+i][x+j] = [255, 255, 255]
         return
     image = cv2.imread(os.path.join(image_path))
     rows, cols = sizeof(image)
@@ -75,8 +78,9 @@ def pixel_selector(image_path):
             finished = True
     cv2.destroyAllWindows()
 
-    image_path = image_path.split('\\')
-    image_path, filename = "\\".join(image_path[:-1]), image_path[-1]
+    return image
+
+    filename = image_path.split('\\')[-1]
     filename, extension = filename.split('.')
 
     # not ycrcb image
@@ -86,13 +90,14 @@ def pixel_selector(image_path):
     else:
         prev_condition, scale, colorspace = filename.split('_')
 
-    # new_condition = input("enter new condition: ")
-    new_condition = "test"
     if colorspace:
-        new_filename = new_condition + "_" + scale + "_" + colorspace + '.' + extension
+        new_filename = prev_condition + "_" + scale + "_" + colorspace + "_altered." + extension
     else:
-        new_filename = new_condition + '_' + scale + '.' + extension
-    # cv2.imwrite(image_path + '\\' + new_filename, image)
+        new_filename = prev_condition + '_' + scale + "_altered." + extension
+    
+    shouldSave = input("save image? (y/n): ")
+    if shouldSave == 'y':
+        cv2.imwrite(os.path.join("altered-images", new_filename), image)
     return
 
 
@@ -165,17 +170,16 @@ def find_stats(dir_path):
 # for now, crops left and top of image to remove scale and FLIR label
 def crop_image(img):
     rows, cols = sizeof(img)
-    cropped_img = img[56:rows, :]
+    cropped_img = img[:, :521]
     return cropped_img
 
 def ycrcb2y(image_path):
     filename = image_path.split('\\')[-1]
     filename, extension = filename.split('.')
-    condition, scale = filename.split('_')[:2]
     img = cv2.imread(image_path)
     Y_image = img[:,:,0]
 
-    cv2.imwrite(os.path.join("Y-Reference-Images", condition + '_' + scale + "_Y." + extension), Y_image)
+    cv2.imwrite(os.path.join("Y-Reference-Images", filename[:-6] + "_Y." + extension), Y_image)
     return
 
 def histogram_equalize(image_path):
@@ -253,31 +257,167 @@ def registration(img1, img2, img1_color):
     return transformed_img
     # cv2.imwrite(os.path.join('output.jpg'), transformed_img)
 
+def show_registration(rotation_folder, reference_folder, rotation_filename, reference_filename):
+    img1_color = crop_image(cv2.imread(os.path.join(rotation_folder, rotation_filename)))
+    img2_color = crop_image(cv2.imread(os.path.join(reference_folder, reference_filename)))
+    img1_y = cv2.cvtColor(img1_color, cv2.COLOR_BGR2YCrCb)[:,:,0]
+    img2_y = cv2.cvtColor(img2_color, cv2.COLOR_BGR2YCrCb)[:,:,0]
+    registered_img = registration(img1_y, img2_y, img1_color)
+    # cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y_equalized_heavy_nowidth.jpg"), registered_img)
+    finished = False
+    while(not finished):
+        cv2.imshow('registered rotations', np.hstack([img1_color, img2_color, registered_img]))
+        k = cv2.waitKey(4) & 0xFF
+        if k == 27:
+            finished = True
+
+def img_subtraction(img1, img2):
+    img3 = cv2.absdiff(img1,img2)
+    finished = False
+    while(not finished):
+        cv2.imshow('image subtraction', np.hstack([img1, img2, img3]))
+        k = cv2.waitKey(4) & 0xFF
+        if k == 27:
+            finished = True
+
+def detect_faults(img):
+    rows, cols = sizeof(img)
+    tmp = img.copy()
+
+    for i in range(rows):
+        for j in range(cols):
+            if tmp[i,j,0] >= 250:
+                count = 0
+                queue = [(i,j)]
+                seen = set([(i,j)])
+                while queue:
+                    x,y = queue.pop(0)
+                    if tmp[x,y,0] >= 250:
+                        count += 1
+                        tmp[x,y] = [0,0,0]
+                        seen.add((x,y))
+                        if x < rows-1:
+                            queue.append((x+1,y))
+                        if x > 0:
+                            queue.append((x-1,y))
+                        if y < cols-1:
+                            queue.append((x,y+1))
+                        if y > 0:
+                            queue.append((x,y-1))
+                center_x = 0
+                center_y = 0
+                min_x = rows
+                max_x = 0
+                min_y = cols
+                max_y = 0
+                for i,j in seen:
+                    center_x += i
+                    center_y += j
+                    min_x = min(min_x, i)
+                    max_x = max(max_x, i)
+                    min_y = min(min_y, j)
+                    max_y = max(max_y, j)
+                center_x //= count
+                center_y //= count
+                curr_radius = max(max_x-min_x, max_y-min_y) // 2 + 20
+                cv2.circle(img, center = (center_y, center_x), radius=curr_radius, color=(0,0,255), thickness=2)
+                print(count)
+
+    cv2.namedWindow('image', cv2.WINDOW_NORMAL) # Can be resized
+    cv2.resizeWindow('image', cols, rows) #Reasonable size window
+    finished = False
+    while(not finished):
+        cv2.imshow('image', img)
+        k = cv2.waitKey(4) & 0xFF
+        if k == 27:
+            finished = True
+    cv2.destroyAllWindows()
+
+    return img
+
+
 if __name__ == "__main__":
+    # for filename in os.listdir("reference-images"):
+    #     cropped_img = crop_image(cv2.imread(os.path.join("reference-images", filename)))
+    #     cv2.imwrite(os.path.join("cropped-reference-images", filename) , cropped_img)
+    #     bgr2ycrcb(os.path.join("reference-images", filename))
+    #     ycrcb2y(os.path.join("ycrcb-reference-images", filename[:-4] + "_ycrcb.jpg"))
 
-    for filename in os.listdir("reference-images"):
-        bgr2ycrcb(os.path.join("reference-images", filename))
-        ycrcb2y(os.path.join("ycrcb-reference-images", filename[:-4] + "_ycrcb.jpg"))
+    # pixel_selector(os.path.join("y-reference-images", "WH_Normal_26-52_Y.jpg"))
 
-    # folder_name = "rotation-images"
-    # filename_1 = "NormRotateRight3_27-52.jpg"
-    # filename_2 = "NormStraight_27-52.jpg"
-    # img1_color = cv2.imread(os.path.join(folder_name, filename_1))
-    # img2_color = cv2.imread(os.path.join(folder_name, filename_2))
-    # img1_y = cv2.cvtColor(img1_color, cv2.COLOR_BGR2YCrCb)[:,:,0]
-    # img2_y = cv2.cvtColor(img2_color, cv2.COLOR_BGR2YCrCb)[:,:,0]
-    # registered_img = registration(img1_y, img2_y, img1_color)
-    # # cv2.imwrite(os.path.join("post-registration", "Heavy+Normal_27-52_Y_equalized_heavy_nowidth.jpg"), registered_img)
+    # img = convert_img(os.path.join("reference-images", "Rainbow_35-64.jpg"))
+
     # finished = False
     # while(not finished):
-    #     cv2.imshow('registered rotations', np.hstack([img1_color, img2_color, registered_img]))
+    #     cv2.imshow('thermal_np', img)
     #     k = cv2.waitKey(4) & 0xFF
     #     if k == 27:
     #         finished = True
+
+    # img1 = cv2.imread(os.path.join("reference-images", "Rainbow_35-64.jpg"))
+    # img2 = cv2.imread(os.path.join("rotation-images", "RainbowOffsetUp_35-64.jpg"))
+    # img_subtraction(img1, img2)
+
+
+    # IMAGE REGISTRATION
+    # show_registration(rotation_folder = "rotation-images", reference_folder = "reference-images", rotation_filename = "Iron_Heavy_26-52_r4.jpg", reference_filename = "Iron_Heavy_26-52.jpg")
+    
+
+    # CREATING PRE-PERTURBATION IMAGES
+    # img = crop_image(cv2.imread(os.path.join("reference-images", "WH_Normal_26-52.jpg")))
+    # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"), img)
+    
+    # to_rotate = Image.open("./pre-perturbation/WH_Normal_26-52.jpg")
+    # rotated = to_rotate.rotate(15)
+    # rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
+    
+    # offset = np.zeros_like(img)
+    # offset[:,100:] = img[:,:-100]    
+    # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_offset.jpg"), offset)
+
+    # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    # offset_rotated = np.zeros_like(rotated)
+    # offset_rotated[:,100:] = rotated[:,:-100]
+    # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"), offset_rotated)
+
+
+    # CREATING POST-PERTURBATION IMAGES
+    # pre_perturbation_folder = "pre-perturbation"
+    # post_perturbation_folder = "post-perturbation"
+    # for filename in os.listdir(pre_perturbation_folder):
+    #     altered_img = pixel_selector(os.path.join(pre_perturbation_folder, filename))
+    #     cv2.imwrite(os.path.join(post_perturbation_folder, filename[:-4] + '_altered.jpg'), altered_img)
+    
+    
+    # REGISTRATION OF POST-PERTURBATION IMAGES
+    # for filename in os.listdir("post-perturbation"):
+    #     show_registration(rotation_folder = "post-perturbation", reference_folder = "reference-images", rotation_filename = filename, reference_filename = "WH_Normal_26-52.jpg")
+    
+
+    # RE-DOING offset and rotated image
+    # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    # offset_rotated = np.zeros_like(rotated)
+    # offset_rotated[:,50:] = rotated[:,:-50]
+    # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"), offset_rotated)
+
+    # altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"))
+    # cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_offset_altered.jpg"), altered_img)
+    
+    # show_registration(rotation_folder = "post-perturbation", reference_folder = "reference-images", rotation_filename = "WH_Normal_26-52_rotated_offset_altered.jpg", reference_filename = "WH_Normal_26-52.jpg")
+
+    detect_faults(cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_altered.jpg")))
+
     pass
 
 
 # TODO:
+#
+# retake images using iron and whiteHot
+# think safe to take normal op as heavy and heavy op as faulty for testing purposes
+# put line thru flir logo
+# offset and rotation simultaneuosly
+# maybe another registration algorithm that uses feature matching
+#
 # tweak params of registration
 # breakpoints on registration
 # smaller rotations for registration
