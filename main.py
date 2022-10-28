@@ -270,15 +270,18 @@ def show_registration(rotation_folder, reference_folder, rotation_filename, refe
         k = cv2.waitKey(4) & 0xFF
         if k == 27:
             finished = True
+    return registered_img
 
-def img_subtraction(img1, img2):
+def img_subtraction(img1, img2, shouldShow = True):
     img3 = cv2.absdiff(img1,img2)
-    finished = False
-    while(not finished):
-        cv2.imshow('image subtraction', np.hstack([img1, img2, img3]))
-        k = cv2.waitKey(4) & 0xFF
-        if k == 27:
-            finished = True
+    if shouldShow:
+        finished = False
+        while(not finished):
+            cv2.imshow('image subtraction', np.hstack([img1, img2, img3]))
+            k = cv2.waitKey(4) & 0xFF
+            if k == 27:
+                finished = True
+    return img3
 
 def detect_faults(img):
     rows, cols = sizeof(img)
@@ -287,13 +290,11 @@ def detect_faults(img):
     for i in range(rows):
         for j in range(cols):
             if tmp[i,j,0] >= 250:
-                count = 0
                 queue = [(i,j)]
                 seen = set([(i,j)])
                 while queue:
                     x,y = queue.pop(0)
                     if tmp[x,y,0] >= 250:
-                        count += 1
                         tmp[x,y] = [0,0,0]
                         seen.add((x,y))
                         if x < rows-1:
@@ -317,11 +318,11 @@ def detect_faults(img):
                     max_x = max(max_x, i)
                     min_y = min(min_y, j)
                     max_y = max(max_y, j)
-                center_x //= count
-                center_y //= count
+                center_x //= len(seen)
+                center_y //= len(seen)
                 curr_radius = max(max_x-min_x, max_y-min_y) // 2 + 20
                 cv2.circle(img, center = (center_y, center_x), radius=curr_radius, color=(0,0,255), thickness=2)
-                print(count)
+                print(len(seen))
 
     cv2.namedWindow('image', cv2.WINDOW_NORMAL) # Can be resized
     cv2.resizeWindow('image', cols, rows) #Reasonable size window
@@ -335,6 +336,17 @@ def detect_faults(img):
 
     return img
 
+def show_registration_and_subtraction(altered_img, orig_img):
+    registered_img = registration(altered_img, orig_img, altered_img)
+    subtracted_img = img_subtraction(registered_img, orig_img, False)
+
+    finished = False
+    while(not finished):
+        cv2.imshow('image workflow', np.hstack([altered_img, registered_img, orig_img, subtracted_img]))
+        k = cv2.waitKey(4) & 0xFF
+        if k == 27:
+            finished = True
+    return subtracted_img
 
 if __name__ == "__main__":
     # for filename in os.listdir("reference-images"):
@@ -394,19 +406,32 @@ if __name__ == "__main__":
     #     show_registration(rotation_folder = "post-perturbation", reference_folder = "reference-images", rotation_filename = filename, reference_filename = "WH_Normal_26-52.jpg")
     
 
+    # RE-DOING rotated image
+    to_rotate = Image.open("./pre-perturbation/WH_Normal_26-52.jpg")
+    rotated = to_rotate.rotate(10)
+    rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
+    rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"), altered_img)
+    show_registration(rotation_folder = "post-perturbation", reference_folder = "reference-images", rotation_filename = "WH_Normal_26-52_rotated_altered.jpg", reference_filename = "WH_Normal_26-52.jpg")
+
     # RE-DOING offset and rotated image
     # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
     # offset_rotated = np.zeros_like(rotated)
     # offset_rotated[:,50:] = rotated[:,:-50]
     # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"), offset_rotated)
-
     # altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"))
     # cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_offset_altered.jpg"), altered_img)
-    
     # show_registration(rotation_folder = "post-perturbation", reference_folder = "reference-images", rotation_filename = "WH_Normal_26-52_rotated_offset_altered.jpg", reference_filename = "WH_Normal_26-52.jpg")
 
-    detect_faults(cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_altered.jpg")))
 
+    # detect_faults(cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_altered.jpg")))
+
+
+    orig_img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
+    orig_perturbed_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_altered.jpg"))
+    rotated_perturbed_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"))
+    show_registration_and_subtraction(rotated_perturbed_img, orig_img)
     pass
 
 
