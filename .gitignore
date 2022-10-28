@@ -1,8 +1,8 @@
-__pycache__
+__pycache__/
 
-legacy
+legacy/
 
-.gitignore
+/.gitignore
 
-.vs
+.vs/
 
