@@ -59,10 +59,11 @@ def extract_metadata(image_path):
 # use them to test our overall thermal fault detection system
 def pixel_selector(image_path):
     def mouse_callback(event,x,y,flags,param):
+        radius = 2
         if event == cv2.EVENT_LBUTTONDOWN:
-            # print("value at position: ", x, y, "is: ", image[y][x])
-            for i in range(-5, 6):
-                for j in range(-5, 6):
+            print("value at position: ", x, y, "is: ", image[y][x])
+            for i in range(radius*-1, radius+1):
+                for j in range(radius*-1, radius+1):
                     image[y+i][x+j] = [255, 255, 255]
         return
     image = cv2.imread(os.path.join(image_path))
@@ -211,11 +212,20 @@ def histogram_equalize(image_path):
     plt.title(filename)
     plt.show()
 
-def registration(img1, img2, img1_color):
+def registration(img1, img2, img1_color, mask=None):
     height, width = sizeof(img1)
     # Create ORB detector with 5000 features.
     orb_detector = cv2.ORB_create(5000)
     
+    # Trying to do edge detection and registration using edge detection
+    # then using the resulting matrix on the original image
+    threshold1 = 30
+    threshold2 = 45
+    apertureSize = 3
+
+    mask1 = cv2.Canny(img1, threshold1, threshold2, apertureSize)
+    mask2 = cv2.Canny(img2, threshold1, threshold2, apertureSize)
+
     # Find keypoints and descriptors.
     # The first arg is the image, second arg is the mask
     #  (which is not required in this case).
@@ -233,7 +243,7 @@ def registration(img1, img2, img1_color):
     # Sort matches on the basis of their Hamming distance.
     matches.sort(key = lambda x: x.distance)
     
-    # Take the top 90 % matches forward.
+    # Take the top 90 % matches forward. 
     matches = matches[:int(len(matches)*0.9)]
     no_of_matches = len(matches)
     
@@ -247,7 +257,7 @@ def registration(img1, img2, img1_color):
     
     # Find the homography matrix.
     homography, mask = cv2.findHomography(p1, p2, cv2.RANSAC)
-    
+
     # Use this matrix to transform the
     # colored image wrt the reference image.
     transformed_img = cv2.warpPerspective(img1_color,
@@ -287,14 +297,16 @@ def detect_faults(img):
     rows, cols = sizeof(img)
     tmp = img.copy()
 
+    detection_criteria = 100
+
     for i in range(rows):
         for j in range(cols):
-            if tmp[i,j,0] >= 250:
+            if tmp[i,j,0] >= detection_criteria:
                 queue = [(i,j)]
                 seen = set([(i,j)])
                 while queue:
                     x,y = queue.pop(0)
-                    if tmp[x,y,0] >= 250:
+                    if tmp[x,y,0] >= detection_criteria:
                         tmp[x,y] = [0,0,0]
                         seen.add((x,y))
                         if x < rows-1:
@@ -342,7 +354,7 @@ def show_registration_and_subtraction(altered_img, orig_img):
 
     finished = False
     while(not finished):
-        cv2.imshow('image workflow', np.hstack([altered_img, registered_img, orig_img, subtracted_img]))
+        cv2.imshow('image workflow', np.hstack([altered_img, registered_img, subtracted_img]))
         k = cv2.waitKey(4) & 0xFF
         if k == 27:
             finished = True
@@ -383,7 +395,7 @@ if __name__ == "__main__":
     # rotated = to_rotate.rotate(15)
     # rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
     
-    # offset = np.zeros_like(img)
+    # offset = np.zeros_like(img) 
     # offset[:,100:] = img[:,:-100]    
     # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_offset.jpg"), offset)
 
@@ -407,13 +419,14 @@ if __name__ == "__main__":
     
 
     # RE-DOING rotated image
-    to_rotate = Image.open("./pre-perturbation/WH_Normal_26-52.jpg")
-    rotated = to_rotate.rotate(10)
-    rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
-    rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
-    altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
-    cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"), altered_img)
-    show_registration(rotation_folder = "post-perturbation", reference_folder = "reference-images", rotation_filename = "WH_Normal_26-52_rotated_altered.jpg", reference_filename = "WH_Normal_26-52.jpg")
+    # to_rotate = Image.open("./pre-perturbation/WH_Normal_26-52.jpg")
+    # rotated = to_rotate.rotate(10)
+    # rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
+    # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    # altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    # cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"), altered_img)
+    # show_registration(rotation_folder = "post-perturbation", reference_folder = "reference-images", rotation_filename = "WH_Normal_26-52_rotated_altered.jpg", reference_filename = "WH_Normal_26-52.jpg")
+
 
     # RE-DOING offset and rotated image
     # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
@@ -428,10 +441,33 @@ if __name__ == "__main__":
     # detect_faults(cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_altered.jpg")))
 
 
+    # orig_img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
+    # orig_perturbed_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_altered.jpg"))
+    # rotated_perturbed_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"))
+    # show_registration(rotation_folder = "post-perturbation", reference_folder = "edge-detected", rotation_filename = "WH_Normal_26-52_rotated_altered.jpg", reference_filename = "WH_Normal_26-52_edges.jpg")
+    # registration(rotated_perturbed_img, orig_img, rotated_perturbed_img)
+    # subtracted_img = show_registration_and_subtraction(rotated_perturbed_img, orig_img)
+    # detect_faults(subtracted_img)
+
     orig_img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
-    orig_perturbed_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_altered.jpg"))
-    rotated_perturbed_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"))
-    show_registration_and_subtraction(rotated_perturbed_img, orig_img)
+    # pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
+    rotated_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"))
+    
+    t_lower = 30
+    t_upper = 45
+    aperture_size = 3
+    orig_edge = cv2.Canny(orig_img, t_lower, t_upper, apertureSize=aperture_size)
+    rotated_edge = cv2.Canny(rotated_img, t_lower, t_upper, apertureSize=aperture_size)
+
+    registered_edge = registration(rotated_edge, orig_edge, rotated_img[:, :, 0])
+    registered_img = registration(rotated_img, orig_img, rotated_img)
+
+    cv2.imshow('original', np.hstack([orig_img, rotated_img, registered_img]))
+    cv2.imshow('edge', np.hstack([orig_edge, rotated_edge, registered_edge]))
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    cv2.imwrite(os.path.join("edge-detected", "WH_Normal_26-52_edges.jpg"), orig_edge)
+    
     pass
 
 
