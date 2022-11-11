@@ -419,22 +419,22 @@ if __name__ == "__main__":
     
 
     ### RE-DOING rotated image
-    # to_rotate = Image.open("./pre-perturbation/WH_Normal_26-52.jpg")
-    # rotated = to_rotate.rotate(10)
-    # rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
-    # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
-    # altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
-    # cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"), altered_img)
+    to_rotate = Image.open("./pre-perturbation/WH_Normal_26-52.jpg")
+    rotated = to_rotate.rotate(15)
+    rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
+    rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"), altered_img)
 
 
     ### RE-DOING offset and rotated image
-    # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
-    # offset_rotated = np.zeros_like(rotated)
-    # offset_rotated[:,50:] = rotated[:,:-50]
-    # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"), offset_rotated)
-    # altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"))
-    # cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_offset_altered.jpg"), altered_img)
-    # show_registration(rotation_folder = "post-perturbation", reference_folder = "reference-images", rotation_filename = "WH_Normal_26-52_rotated_offset_altered.jpg", reference_filename = "WH_Normal_26-52.jpg")
+    rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    offset_rotated = np.zeros_like(rotated)
+    # offset_rotated[:,50:] = rotated[:,:-50] # offset to the right
+    offset_rotated[:,:-50] = rotated[:,50:] # offset to the left
+    cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"), offset_rotated)
+    altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"))
+    cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_offset_altered.jpg"), altered_img)
 
 
     # detect_faults(cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_altered.jpg")))
@@ -451,7 +451,7 @@ if __name__ == "__main__":
 
     ### Loading in images
     orig_img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
-    rotated_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"))
+    rotated_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_offset_altered.jpg"))
     
     ### Doing canny edge detection
     t_lower = 30
