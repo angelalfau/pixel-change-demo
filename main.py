@@ -298,16 +298,22 @@ def detect_faults(img):
     tmp = img.copy()
 
     detection_criteria = 100
-
+    isSingleChannel = type(img[0,0]) == np.uint8
+    
     for i in range(rows):
         for j in range(cols):
-            if tmp[i,j,0] >= detection_criteria:
+            if (isSingleChannel and tmp[i,j] >= detection_criteria) or (not isSingleChannel and tmp[i,j,0] >= detection_criteria):
+                print(i, j)
                 queue = [(i,j)]
                 seen = set([(i,j)])
                 while queue:
                     x,y = queue.pop(0)
-                    if tmp[x,y,0] >= detection_criteria:
-                        tmp[x,y] = [0,0,0]
+                    if (isSingleChannel and tmp[x,y] >= detection_criteria) or (not isSingleChannel and tmp[x,y,0] >= detection_criteria):
+                        
+                        if isSingleChannel:
+                            tmp[x,y] = 0
+                        else:
+                            tmp[x,y] = [0,0,0]
                         seen.add((x,y))
                         if x < rows-1:
                             queue.append((x+1,y))
@@ -333,11 +339,19 @@ def detect_faults(img):
                 center_x //= len(seen)
                 center_y //= len(seen)
                 curr_radius = max(max_x-min_x, max_y-min_y) // 2 + 20
-                cv2.circle(img, center = (center_y, center_x), radius=curr_radius, color=(0,0,255), thickness=2)
-                print(len(seen))
+                # currently making the circle white. May want to revert back to red circle
+                # However, changing back to red would mean having to convert single-channel images to 3-channel images
+                # and then isSingleChannel can also be removed
+                cv2.circle(img, center = (center_y, center_x), radius=curr_radius, color=(255,255,255), thickness=2)
+
+    def mouse_callback(event,x,y,flags,param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            print("value at position: ", x, y, "is: ", img[y][x])
+        return
 
     cv2.namedWindow('image', cv2.WINDOW_NORMAL) # Can be resized
     cv2.resizeWindow('image', cols, rows) #Reasonable size window
+    cv2.setMouseCallback('image', mouse_callback) #Mouse callback
     finished = False
     while(not finished):
         cv2.imshow('image', img)
@@ -361,33 +375,19 @@ def show_registration_and_subtraction(altered_img, orig_img):
     return subtracted_img
 
 if __name__ == "__main__":
+    ### Saves cropped images and converts to different color spaces
     # for filename in os.listdir("reference-images"):
     #     cropped_img = crop_image(cv2.imread(os.path.join("reference-images", filename)))
     #     cv2.imwrite(os.path.join("cropped-reference-images", filename) , cropped_img)
     #     bgr2ycrcb(os.path.join("reference-images", filename))
     #     ycrcb2y(os.path.join("ycrcb-reference-images", filename[:-4] + "_ycrcb.jpg"))
 
-    # pixel_selector(os.path.join("y-reference-images", "WH_Normal_26-52_Y.jpg"))
 
-    # img = convert_img(os.path.join("reference-images", "Rainbow_35-64.jpg"))
-
-    # finished = False
-    # while(not finished):
-    #     cv2.imshow('thermal_np', img)
-    #     k = cv2.waitKey(4) & 0xFF
-    #     if k == 27:
-    #         finished = True
-
-    # img1 = cv2.imread(os.path.join("reference-images", "Rainbow_35-64.jpg"))
-    # img2 = cv2.imread(os.path.join("rotation-images", "RainbowOffsetUp_35-64.jpg"))
-    # img_subtraction(img1, img2)
-
-
-    # IMAGE REGISTRATION
+    ### IMAGE REGISTRATION
     # show_registration(rotation_folder = "rotation-images", reference_folder = "reference-images", rotation_filename = "Iron_Heavy_26-52_r4.jpg", reference_filename = "Iron_Heavy_26-52.jpg")
     
 
-    # CREATING PRE-PERTURBATION IMAGES
+    ### CREATING PRE-PERTURBATION IMAGES
     # img = crop_image(cv2.imread(os.path.join("reference-images", "WH_Normal_26-52.jpg")))
     # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"), img)
     
@@ -405,7 +405,7 @@ if __name__ == "__main__":
     # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"), offset_rotated)
 
 
-    # CREATING POST-PERTURBATION IMAGES
+    ### CREATING POST-PERTURBATION IMAGES
     # pre_perturbation_folder = "pre-perturbation"
     # post_perturbation_folder = "post-perturbation"
     # for filename in os.listdir(pre_perturbation_folder):
@@ -413,22 +413,21 @@ if __name__ == "__main__":
     #     cv2.imwrite(os.path.join(post_perturbation_folder, filename[:-4] + '_altered.jpg'), altered_img)
     
     
-    # REGISTRATION OF POST-PERTURBATION IMAGES
+    ### REGISTRATION OF POST-PERTURBATION IMAGES
     # for filename in os.listdir("post-perturbation"):
     #     show_registration(rotation_folder = "post-perturbation", reference_folder = "reference-images", rotation_filename = filename, reference_filename = "WH_Normal_26-52.jpg")
     
 
-    # RE-DOING rotated image
+    ### RE-DOING rotated image
     # to_rotate = Image.open("./pre-perturbation/WH_Normal_26-52.jpg")
     # rotated = to_rotate.rotate(10)
     # rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
     # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
     # altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
     # cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"), altered_img)
-    # show_registration(rotation_folder = "post-perturbation", reference_folder = "reference-images", rotation_filename = "WH_Normal_26-52_rotated_altered.jpg", reference_filename = "WH_Normal_26-52.jpg")
 
 
-    # RE-DOING offset and rotated image
+    ### RE-DOING offset and rotated image
     # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
     # offset_rotated = np.zeros_like(rotated)
     # offset_rotated[:,50:] = rotated[:,:-50]
@@ -449,48 +448,33 @@ if __name__ == "__main__":
     # subtracted_img = show_registration_and_subtraction(rotated_perturbed_img, orig_img)
     # detect_faults(subtracted_img)
 
+
+    ### Loading in images
     orig_img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
-    # pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
     rotated_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"))
     
+    ### Doing canny edge detection
     t_lower = 30
     t_upper = 45
     aperture_size = 3
     orig_edge = cv2.Canny(orig_img, t_lower, t_upper, apertureSize=aperture_size)
     rotated_edge = cv2.Canny(rotated_img, t_lower, t_upper, apertureSize=aperture_size)
 
+    ### Registration of Edge Detected Images
     registered_edge = registration(rotated_edge, orig_edge, rotated_img[:, :, 0])
     registered_img = registration(rotated_img, orig_img, rotated_img)
 
+    ### Doing Fault Detection and Displaying Result
+    singleChannel_orig_img = orig_img[:, :, 0]
+    subtracted_img = cv2.absdiff(registered_edge, singleChannel_orig_img)
+    detect_faults(subtracted_img)
+
+    ### Displays Registration
     cv2.imshow('original', np.hstack([orig_img, rotated_img, registered_img]))
     cv2.imshow('edge', np.hstack([orig_edge, rotated_edge, registered_edge]))
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-    cv2.imwrite(os.path.join("edge-detected", "WH_Normal_26-52_edges.jpg"), orig_edge)
     
     pass
 
 
-# TODO:
-#
-# retake images using iron and whiteHot
-# think safe to take normal op as heavy and heavy op as faulty for testing purposes
-# put line thru flir logo
-# offset and rotation simultaneuosly
-# maybe another registration algorithm that uses feature matching
-#
-# tweak params of registration
-# breakpoints on registration
-# smaller rotations for registration
-# use heavy as reference
-# take new pics with higher scales (low++ high++) do multiple scales for each
-# manually create hot spots, changing luminance in 4x4 6x6 etc. keep changing
-# When can we see difference? how much temp diff is +10 luminance, do several steps
-# goal is to see difference in 1 pixel with 1 luminance change
-
-# if retaking image, remember offset and possibly rotation degree
-# and note offset/rotation in filename
-# 1. how much offset can be corrected
-# 2. how much rotation can be corrected
-# 3. need absolute value or not of the difference?
-# 4. how to crop equalized image

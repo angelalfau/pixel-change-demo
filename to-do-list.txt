@@ -1,4 +1,20 @@
-# TODO:
+### TODO:
+#
+# retake images using iron and whiteHot
+# think safe to take normal op as heavy and heavy op as faulty for testing purposes
+# put line thru flir logo
+# offset and rotation simultaneuosly
+# maybe another registration algorithm that uses feature matching
+#
+# tweak params of registration
+# breakpoints on registration
+# smaller rotations for registration
+# use heavy as reference
+# take new pics with higher scales (low++ high++) do multiple scales for each
+# manually create hot spots, changing luminance in 4x4 6x6 etc. keep changing
+# When can we see difference? how much temp diff is +10 luminance, do several steps
+# goal is to see difference in 1 pixel with 1 luminance change
+#
 # if retaking image, remember offset and possibly rotation degree
 # and note offset/rotation in filename
 # 1. how much offset can be corrected
