@@ -61,7 +61,9 @@ def pixel_selector(image_path):
     def mouse_callback(event,x,y,flags,param):
         radius = 2
         if event == cv2.EVENT_LBUTTONDOWN:
-            print("value at position: ", x, y, "is: ", image[y][x])
+            # print("value at position: ", x, y, "is: ", image[y][x])
+            print("altered center: ", y, x)
+            print("# of altered pixels: ", (radius*2+1)**2)
             for i in range(radius*-1, radius+1):
                 for j in range(radius*-1, radius+1):
                     image[y+i][x+j] = [255, 255, 255]
@@ -293,11 +295,10 @@ def img_subtraction(img1, img2, shouldShow = True):
                 finished = True
     return img3
 
-def detect_faults(img):
+def detect_faults(img, detection_criteria = 100):
     rows, cols = sizeof(img)
     tmp = img.copy()
 
-    detection_criteria = 100
     isSingleChannel = type(img[0,0]) == np.uint8
     
     for i in range(rows):
@@ -342,6 +343,8 @@ def detect_faults(img):
                 # currently making the circle white. May want to revert back to red circle
                 # However, changing back to red would mean having to convert single-channel images to 3-channel images
                 # and then isSingleChannel can also be removed
+                print("detected center: ", center_x, center_y)
+                print("detected pixels changed: ", len(seen))
                 cv2.circle(img, center = (center_y, center_x), radius=curr_radius, color=(255,255,255), thickness=2)
 
     def mouse_callback(event,x,y,flags,param):
@@ -374,6 +377,118 @@ def show_registration_and_subtraction(altered_img, orig_img):
             finished = True
     return subtracted_img
 
+def add_fault(img, fault_center, lum_diff, radius):
+    y, x = fault_center
+    for i in range(radius*-1, radius+1):
+        for j in range(radius*-1, radius+1):
+            for k in range(len(img[0,0])):
+                img[y+i][x+j][k] = min(255, img[y+i][x+j][k] + lum_diff)
+    return img
+
+def rotate_image(path, angle):
+    to_rotate = Image.open(path)
+    rotated = to_rotate.rotate(angle)
+    rotated.save(os.path.join("temp", "WH_Normal_26-52_rotated_altered.jpg"))
+    return
+
+def detect_fault_error(subtracted, lum_diff, fault_radius, fault_center, num_pixels_error, lum_diff_error, size_err_by_deg, lum_err_by_deg, rotation_indx, lum_diff_indx, radius_indx):
+    rows, cols = sizeof(subtracted)
+    tmp = subtracted.copy()
+
+    radius_to_check = fault_radius + 10
+    detection_criteria = 50
+    isSingleChannel = type(subtracted[0,0]) == np.uint8
+    
+    for i in range(fault_center[0]-radius_to_check, fault_center[0]+radius_to_check):
+        for j in range(fault_center[1]-radius_to_check, fault_center[1]+radius_to_check):
+            if (isSingleChannel and tmp[i,j] >= detection_criteria) or (not isSingleChannel and tmp[i,j,0] >= detection_criteria):
+                detected_lum_diff = 0
+                queue = [(i,j)]
+                seen = set([(i,j)])
+                while queue:
+                    x,y = queue.pop(0)
+                    if (isSingleChannel and tmp[x,y] >= detection_criteria) or (not isSingleChannel and tmp[x,y,0] >= detection_criteria):
+                        detected_lum_diff += tmp[x,y]
+                        if isSingleChannel:
+                            tmp[x,y] = 0
+                        else:
+                            tmp[x,y] = [0,0,0]
+                        seen.add((x,y))
+                        if x < rows-1:
+                            queue.append((x+1,y))
+                        if x > 0:
+                            queue.append((x-1,y))
+                        if y < cols-1:
+                            queue.append((x,y+1))
+                        if y > 0:
+                            queue.append((x,y-1))
+                center_x = 0
+                center_y = 0
+                min_x = rows
+                max_x = 0
+                min_y = cols
+                max_y = 0
+                for i,j in seen:
+                    center_x += i
+                    center_y += j
+                    min_x = min(min_x, i)
+                    max_x = max(max_x, i)
+                    min_y = min(min_y, j)
+                    max_y = max(max_y, j)
+                center_x //= len(seen)
+                center_y //= len(seen)
+
+                center_error = (abs(center_x-fault_center[0]), abs(center_y-fault_center[1]))
+
+                actual_size = (fault_radius*2+1)**2
+                size_error = abs(len(seen) - actual_size) / actual_size
+
+                # print(len(seen), actual_size, size_error)
+                # if size_error > 100:
+                #     print("========\nsize error too large")
+                #     print("rotation: ", rotation_deg)
+                #     print("lum diff: ", lum_diff)
+                #     print("radius: ", fault_radius)
+
+                detected_lum_diff /= len(seen)
+                lum_error = abs(detected_lum_diff - lum_diff) / lum_diff
+
+                # (subtracted, lum_diff, fault_radius, fault_center, num_pixels_error, lum_diff_error, size_err_by_deg, lum_err_by_deg, rotation_indx, lum_diff_indx, radius_indx)
+                num_pixels_error[radius_indx] += size_error
+                lum_diff_error[lum_diff_indx] += lum_error
+                size_err_by_deg[rotation_indx] += size_error
+                lum_err_by_deg[rotation_indx] += lum_error
+                center_x_err_by_deg[rotation_indx] += center_error[0]
+                center_y_err_by_deg[rotation_indx] += center_error[1]
+
+                aspect_ratio = (max_x-min_x+1) / (max_y-min_y+1)
+
+                print(aspect_ratio)
+
+                if aspect_ratio < 0.5 or aspect_ratio > 2:
+                    print("========\naspect ratio too large")
+                    print("rotation: ", rotation_deg)
+                    print("lum diff: ", lum_diff)
+                    print("radius: ", fault_radius)
+                    print("size error: ", size_error)
+                    print("lum error: ", lum_error)
+                    print("center error: ", center_error)
+                    print("aspect ratio: ", aspect_ratio)
+                    show_img(subtracted)
+                # if size_error > 40:
+                #     print(len(seen), size_error)
+                #     show_img(subtracted)
+                # print("size error: ", size_error)
+                return aspect_ratio
+    # print("no fault detected", rotation_deg, lum_diff, fault_radius)
+    # show_img(tmp)
+    return 0
+
+def show_img(img, title='title'):
+    cv2.imshow(title, img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
 if __name__ == "__main__":
     ### Saves cropped images and converts to different color spaces
     # for filename in os.listdir("reference-images"):
@@ -388,16 +503,24 @@ if __name__ == "__main__":
     
 
     ### CREATING PRE-PERTURBATION IMAGES
-    # img = crop_image(cv2.imread(os.path.join("reference-images", "WH_Normal_26-52.jpg")))
+    # img = cv2.imread(os.path.join("reference-images", "WH_Normal_26-52.jpg"))
     # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"), img)
     
     # to_rotate = Image.open("./pre-perturbation/WH_Normal_26-52.jpg")
     # rotated = to_rotate.rotate(15)
     # rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
-    
-    # offset = np.zeros_like(img) 
-    # offset[:,100:] = img[:,:-100]    
+
+    # img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
+    # offset = np.zeros_like(img)
+    # offset_amt = 140
+    # isOffsetRight = True
+    # if isOffsetRight:
+    #     offset[:,offset_amt:] = img[:,:-offset_amt]    
+    # else:
+    #     offset[:,:-offset_amt] = img[:,offset_amt:]
     # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_offset.jpg"), offset)
+    # altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_offset.jpg"))
+    # cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_offset_altered.jpg"), altered_img)
 
     # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
     # offset_rotated = np.zeros_like(rotated)
@@ -419,22 +542,22 @@ if __name__ == "__main__":
     
 
     ### RE-DOING rotated image
-    to_rotate = Image.open("./pre-perturbation/WH_Normal_26-52.jpg")
-    rotated = to_rotate.rotate(15)
-    rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
-    rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
-    altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
-    cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"), altered_img)
+    # to_rotate = Image.open("./pre-perturbation/WH_Normal_26-52.jpg")
+    # rotated = to_rotate.rotate(15)
+    # rotated.save("./pre-perturbation/WH_Normal_26-52_rotated.jpg")
+    # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    # altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    # cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"), altered_img)
 
 
     ### RE-DOING offset and rotated image
-    rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
-    offset_rotated = np.zeros_like(rotated)
+    # rotated = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated.jpg"))
+    # offset_rotated = np.zeros_like(rotated)
     # offset_rotated[:,50:] = rotated[:,:-50] # offset to the right
-    offset_rotated[:,:-50] = rotated[:,50:] # offset to the left
-    cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"), offset_rotated)
-    altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"))
-    cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_offset_altered.jpg"), altered_img)
+    # # offset_rotated[:,:-50] = rotated[:,50:] # offset to the left
+    # cv2.imwrite(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"), offset_rotated)
+    # altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52_rotated_offset.jpg"))
+    # cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_offset_altered.jpg"), altered_img)
 
 
     # detect_faults(cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_altered.jpg")))
@@ -450,31 +573,157 @@ if __name__ == "__main__":
 
 
     ### Loading in images
-    orig_img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
-    rotated_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_offset_altered.jpg"))
+    # orig_img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
+    # rotated_img = cv2.imread(os.path.join("post-perturbation", "WH_Normal_26-52_rotated_altered.jpg"))
     
-    ### Doing canny edge detection
+    # print(sizeof(orig_img))
+
+    # ### Doing canny edge detection
+    # t_lower = 30
+    # t_upper = 45
+    # aperture_size = 1
+    # orig_edge = cv2.Canny(orig_img, t_lower, t_upper, apertureSize=aperture_size)
+    # show_img(orig_edge, "orig_edge")
+    # rotated_edge = cv2.Canny(rotated_img, t_lower, t_upper, apertureSize=aperture_size)
+
+    # ### Registration of Edge Detected Images
+    # registered_edge = registration(rotated_edge, orig_edge, rotated_img[:, :, 0])
+    # registered_img = registration(rotated_img, orig_img, rotated_img)
+
+    # ### Doing Fault Detection and Displaying Result
+    # singleChannel_orig_img = orig_img[:, :, 0]
+    # subtracted_img = cv2.absdiff(registered_edge, singleChannel_orig_img)
+    # detect_faults(subtracted_img)
+
+    # ### Displays Registration
+    # cv2.imshow('original', np.hstack([orig_img, rotated_img, registered_img]))
+    # cv2.imshow('edge', np.hstack([orig_edge, rotated_edge, registered_edge]))
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+    
+    # altered_img = pixel_selector(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
+    # cv2.imwrite(os.path.join("post-perturbation", "WH_Normal_26-52_altered.jpg"), altered_img)
+
+    # to_rotate = Image.open("./post-perturbation/WH_Normal_26-52_altered.jpg")
+    # rotated = to_rotate.rotate(15)
+    # rotated.save("./post-perturbation/WH_Normal_26-52_rotated_altered.jpg")
+
+
+    # Rotation Parameters (0, 45, 5)
+    min_deg = 0
+    max_deg = 45
+    deg_step = 5
+
+    # Perturbation Value Parameters (50, 100, 10)
+    min_lum_diff = 50
+    max_lum_diff = 100
+    lum_diff_step = 10
+
+    # Perturbation Size Parameters (0, 3, 1)
+    min_fault_radius = 0
+    max_fault_radius = 3
+    fault_radius_step = 1
+    
+    # Edge Detection Parameters (30, 45, 3)
     t_lower = 30
     t_upper = 45
     aperture_size = 3
-    orig_edge = cv2.Canny(orig_img, t_lower, t_upper, apertureSize=aperture_size)
-    rotated_edge = cv2.Canny(rotated_img, t_lower, t_upper, apertureSize=aperture_size)
 
-    ### Registration of Edge Detected Images
-    registered_edge = registration(rotated_edge, orig_edge, rotated_img[:, :, 0])
-    registered_img = registration(rotated_img, orig_img, rotated_img)
+    average_aspect_ratio = 0.0
 
-    ### Doing Fault Detection and Displaying Result
-    singleChannel_orig_img = orig_img[:, :, 0]
-    subtracted_img = cv2.absdiff(registered_edge, singleChannel_orig_img)
-    detect_faults(subtracted_img)
+    num_pixels_x = [(radius*2+1)**2 for radius in range(min_fault_radius, max_fault_radius + 1, fault_radius_step)]
+    num_pixels_error = [0 for _ in range(len(num_pixels_x))]
 
-    ### Displays Registration
-    cv2.imshow('original', np.hstack([orig_img, rotated_img, registered_img]))
-    cv2.imshow('edge', np.hstack([orig_edge, rotated_edge, registered_edge]))
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    
+    lum_diff_x = [lum_diff for lum_diff in range(min_lum_diff, max_lum_diff+1, lum_diff_step)]
+    lum_diff_error = [0 for _ in range(len(lum_diff_x))]
+
+    rotation_x = [deg for deg in range(min_deg, max_deg+1, deg_step)]
+    size_err_by_deg = [0 for _ in range(len(rotation_x))]
+    lum_err_by_deg = [0 for _ in range(len(rotation_x))]
+    center_x_err_by_deg = [0 for _ in range(len(rotation_x))]
+    center_y_err_by_deg = [0 for _ in range(len(rotation_x))]
+
+    fault_center = (340, 75)
+
+    for lum_diff in range(min_lum_diff, max_lum_diff+1, lum_diff_step):
+        lum_diff_indx = (lum_diff // lum_diff_step) - (min_lum_diff // lum_diff_step)
+
+        for fault_radius in range(min_fault_radius, max_fault_radius+1, fault_radius_step):
+            radius_indx = fault_radius // fault_radius_step
+
+            orig_img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
+            single_channel_orig = orig_img[:, :, 0]
+            orig_edge = cv2.Canny(orig_img, t_lower, t_upper, apertureSize=aperture_size)
+
+            img = add_fault(orig_img, fault_center, lum_diff, fault_radius)
+            cv2.imwrite(os.path.join("temp", "WH_Normal_26-52_altered.jpg"), img)
+
+            for rotation_deg in range(min_deg, max_deg+1, deg_step):
+                rotation_indx = rotation_deg // deg_step
+
+                rotate_image(os.path.join("temp", "WH_Normal_26-52_altered.jpg"), rotation_deg)
+                rotated = cv2.imread(os.path.join("temp", "WH_Normal_26-52_rotated_altered.jpg"))
+                rotated_edge = cv2.Canny(rotated, t_lower, t_upper, apertureSize=aperture_size)
+                registered = registration(rotated_edge, orig_edge, rotated[:, :, 0])
+                subtracted = cv2.subtract(registered, single_channel_orig)
+
+                average_aspect_ratio += detect_fault_error(subtracted, lum_diff, fault_radius, fault_center, num_pixels_error, lum_diff_error, size_err_by_deg, lum_err_by_deg, rotation_indx, lum_diff_indx, radius_indx)
+                # print("radius: ", fault_radius, "\nlum diff: ", lum_diff)
+                # detect_faults(subtracted, 50)
+
+    average_aspect_ratio /= 240
+    print("average aspect ratio: ", average_aspect_ratio)
+
+    for i in range(len(num_pixels_error)):
+        num_pixels_error[i] /= 60
+        num_pixels_error[i] *= 100
+    for i in range(len(lum_diff_error)):
+        lum_diff_error[i] /= 40
+        lum_diff_error[i] *= 100
+    for i in range(len(size_err_by_deg)):
+        size_err_by_deg[i] /= 24
+        lum_err_by_deg[i] /= 24
+        center_x_err_by_deg[i] /= 24
+        center_y_err_by_deg[i] /= 24
+
+        size_err_by_deg[i] *= 100
+        lum_err_by_deg[i] *= 100
+
+    plt.plot(num_pixels_x, num_pixels_error)
+    plt.xlabel("Fault Size (Pixels)")
+    plt.ylabel("Fault Size Error %")
+    plt.title("Fault Size Error Percentage vs Fault Size")
+    plt.show()
+
+    plt.plot(lum_diff_x, lum_diff_error)
+    plt.xlabel("Luminance Difference")
+    plt.ylabel("Luminance Difference Error %")
+    plt.title("Luminance Difference Error Percentage vs Luminance Difference")
+    plt.show()
+
+    plt.plot(rotation_x, size_err_by_deg)
+    plt.xlabel("Amount of Rotation (Degrees)")
+    plt.ylabel("Avg Fault Size Error %")
+    plt.title("Fault Size Error vs Amount of Rotation")
+    plt.show()
+
+    plt.plot(rotation_x, lum_err_by_deg)
+    plt.xlabel("Amount of Rotation (Degrees)")
+    plt.ylabel("Avg Luminance Difference Error %")
+    plt.title("Luminance Difference Error vs Amount of Rotation")
+    plt.show()
+
+    plt.plot(rotation_x, center_x_err_by_deg)
+    plt.xlabel("Amount of Rotation (Degrees)")
+    plt.ylabel("Horizontal Center Error (Pixels)")
+    plt.title("Horizontal Center Error vs Amount of Rotation")
+    plt.show()
+
+    plt.plot(rotation_x, center_y_err_by_deg)
+    plt.xlabel("Amount of Rotation (Degrees)")
+    plt.ylabel("Vertical Center Error (Pixels)")
+    plt.title("Vertical Center Error vs Amount of Rotation")
+    plt.show()
     pass
 
 
