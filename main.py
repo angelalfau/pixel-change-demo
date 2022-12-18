@@ -455,33 +455,37 @@ def detect_fault_error(subtracted, lum_diff, fault_radius, fault_center, num_pix
 
                 # (subtracted, lum_diff, fault_radius, fault_center, num_pixels_error, lum_diff_error, size_err_by_deg, lum_err_by_deg, rotation_indx, lum_diff_indx, radius_indx)
                 num_pixels_error[radius_indx] += size_error
-                lum_diff_error[lum_diff_indx] += lum_error
+                # lum_diff_error[lum_diff_indx] += lum_error
                 size_err_by_deg[rotation_indx] += size_error
                 lum_err_by_deg[rotation_indx] += lum_error
                 center_x_err_by_deg[rotation_indx] += center_error[0]
                 center_y_err_by_deg[rotation_indx] += center_error[1]
 
-                aspect_ratio = (max_x-min_x+1) / (max_y-min_y+1)
+                lum_diff_error[lum_diff_indx].append(lum_error)
 
-                print(aspect_ratio)
+                # aspect_ratio = (max_x-min_x+1) / (max_y-min_y+1)
 
-                if aspect_ratio < 0.5 or aspect_ratio > 2:
-                    print("========\naspect ratio too large")
-                    print("rotation: ", rotation_deg)
-                    print("lum diff: ", lum_diff)
-                    print("radius: ", fault_radius)
-                    print("size error: ", size_error)
-                    print("lum error: ", lum_error)
-                    print("center error: ", center_error)
-                    print("aspect ratio: ", aspect_ratio)
-                    show_img(subtracted)
+                # print(aspect_ratio)
+
+                # if aspect_ratio < 0.5 or aspect_ratio > 2:
+                #     print("========\naspect ratio too large")
+                #     print("rotation: ", rotation_deg)
+                #     print("lum diff: ", lum_diff)
+                #     print("radius: ", fault_radius)
+                #     print("size error: ", size_error)
+                #     print("lum error: ", lum_error)
+                #     print("center error: ", center_error)
+                #     print("aspect ratio: ", aspect_ratio)
+                #     show_img(subtracted)
+                # return aspect_ratio
                 # if size_error > 40:
                 #     print(len(seen), size_error)
                 #     show_img(subtracted)
                 # print("size error: ", size_error)
-                return aspect_ratio
+                return
     # print("no fault detected", rotation_deg, lum_diff, fault_radius)
     # show_img(tmp)
+    lum_diff_error[lum_diff_indx].append(None)
     return 0
 
 def show_img(img, title='title'):
@@ -608,6 +612,21 @@ if __name__ == "__main__":
     # rotated = to_rotate.rotate(15)
     # rotated.save("./post-perturbation/WH_Normal_26-52_rotated_altered.jpg")
 
+    # lum_diff_error = [[0.04, 0.02, 0.12, 0.17, 0.02, 0.09, 0.04, 0.0, 0.04, 0.0, 0.03, 0.1, 0.04888888888888886, 0.1, 0.09, 0.04, 0.14, 0.02, 0.06666666666666671, 0.1, 0.04, 0.06200000000000003, 0.05, 0.14, 0.06], 
+    # [0.058333333333333334, 0.011111111111111072, 0.004166666666666667, 0.1, 0.020833333333333332, 0.06666666666666667, 0.0733333333333333, 0.008333333333333333, 0.0, 0.058333333333333334, 0.0125, 0.02000000000000005, 0.029411764705882366, 0.014814814814814762, 0.029166666666666667, 0.0064102564102564465, 0.015277777777777739, 0.0155555555555555, 0.0309523809523809, 0.027777777777777738, 0.015277777777777739, 0.02948717948717944, 0.08333333333333333, 0.005555555555555595, 0.0037037037037036904, 0.0046875, 0.11666666666666667, 0.11666666666666667, 0.05416666666666667, 0.004166666666666667], 
+    # [0.1, 0.048571428571428654, 0.10816326530612241, 0.1452380952380952, 0.04285714285714286, 0.06190476190476184, 0.18571428571428572, 0.12857142857142856, 0.07142857142857142, 0.03214285714285714, 0.09583333333333337, 0.07959183673469385, 0.03516483516483524, 0.2714285714285714, 0.07619047619047613, 0.22857142857142856, 0.044285714285714206, 0.034285714285714364, 0.0807142857142858, 0.08571428571428572, 0.015476190476190409, 0.09642857142857143, 0.06714285714285718, 0.026530612244898017, 0.09248120300751879, 0.021182266009852162, 0.11428571428571428, 0.047999999999999994, 0.022619047619047553, 0.046031746031746125], 
+    # [0.08214285714285711, 0.184375, 0.1958333333333334, 0.23125, 0.1291666666666666, 0.05625, 0.1375, 0.10892857142857135, 0.15892857142857136, 0.1125, 0.03375000000000004, 0.06785714285714288, 0.10336538461538466, 0.128125, 0.175, 0.10535714285714289, 0.1375, 0.09437499999999996, 0.10738636363636367, 0.08465909090909082, 0.003472222222222143, 0.06400000000000006, 0.2, 0.037837837837837895, 0.0361486486486486, 0.043359375, 0.0625, 0.05, 0.07019230769230766, 0.044642857142857116], 
+    # [0.34444444444444444, 0.36666666666666664, 0.37777777777777777, 0.43333333333333335, 0.1375, 0.16944444444444445, 0.06388888888888888, 0.15555555555555556, 0.17142857142857146, 0.13333333333333333, 0.09555555555555549, 0.15138888888888888, 0.09722222222222222, 0.0933333333333334, 0.01999999999999997, 0.07222222222222222, 0.10092592592592588, 0.28888888888888886, 0.1076923076923077, 0.1368686868686868, 0.3333333333333333, 0.12323232323232326, 0.08212560386473437, 0.14814814814814808, 0.0682539682539682, 0.43333333333333335, 0.13125, 0.045945945945945886, 0.04558404558404558, 0.048387096774193596, 0.04074074074074079, 0.2, 0.07350427350427348, 0.11461988304093561], 
+    # [0.37, 0.36, 0.45, 0.22333333333333327, 0.1875, 0.14400000000000004, 0.205, 0.20099999999999996, 0.1575, 0.165, 0.1966666666666667, 0.1666666666666667, 0.08400000000000006, 0.0325, 0.043333333333333286, 0.08583333333333329, 0.1314285714285714, 0.1363636363636364, 0.08214285714285709, 0.288, 0.11909090909090907, 0.13730769230769227, 0.005, 0.03357142857142861, 0.06923076923076919, 0.1157142857142857, 0.06764705882352942, 0.0830232558139535, 0.1242857142857143, 0.01, 0.1301724137931035, 0.075, 0.10307692307692307]]
+    
+    # for i in lum_diff_error:
+    #     print(len(i))
+
+    y_axis_lum_diff = [50, 60, 70, 80, 90, 100]
+
+    test_array = [] # (rotation, fault_radius)
+
+    
 
     # Rotation Parameters (0, 45, 5)
     min_deg = 0
@@ -635,7 +654,7 @@ if __name__ == "__main__":
     num_pixels_error = [0 for _ in range(len(num_pixels_x))]
 
     lum_diff_x = [lum_diff for lum_diff in range(min_lum_diff, max_lum_diff+1, lum_diff_step)]
-    lum_diff_error = [0 for _ in range(len(lum_diff_x))]
+    lum_diff_error = [[] for _ in range(len(lum_diff_x))]
 
     rotation_x = [deg for deg in range(min_deg, max_deg+1, deg_step)]
     size_err_by_deg = [0 for _ in range(len(rotation_x))]
@@ -667,12 +686,24 @@ if __name__ == "__main__":
                 registered = registration(rotated_edge, orig_edge, rotated[:, :, 0])
                 subtracted = cv2.subtract(registered, single_channel_orig)
 
-                average_aspect_ratio += detect_fault_error(subtracted, lum_diff, fault_radius, fault_center, num_pixels_error, lum_diff_error, size_err_by_deg, lum_err_by_deg, rotation_indx, lum_diff_indx, radius_indx)
+                detect_fault_error(subtracted, lum_diff, fault_radius, fault_center, num_pixels_error, lum_diff_error, size_err_by_deg, lum_err_by_deg, rotation_indx, lum_diff_indx, radius_indx)
+                test_array.append("deg = " + str(rotation_deg) + ", size = " + str((fault_radius*2+1)**2))
                 # print("radius: ", fault_radius, "\nlum diff: ", lum_diff)
                 # detect_faults(subtracted, 50)
 
     average_aspect_ratio /= 240
     print("average aspect ratio: ", average_aspect_ratio)
+
+    curr_lum_diff = min_lum_diff
+    for lum_diff_error_list in lum_diff_error:
+        print(curr_lum_diff)
+        # print(lum_diff_error_list)
+        print("lum_diff = [", ", ".join(map(str, lum_diff_error_list)), "]", sep="")
+        curr_lum_diff += lum_diff_step
+
+    print(lum_diff_error)
+    print(lum_diff_x)
+    print(test_array)
 
     for i in range(len(num_pixels_error)):
         num_pixels_error[i] /= 60
