@@ -10,6 +10,8 @@ import flir_image_extractor
 import subprocess
 import json
 import numpy as np
+import pandas as pd
+import seaborn as sns
 
 from scipy import ndimage
 from PIL import Image
@@ -391,7 +393,7 @@ def rotate_image(path, angle):
     rotated.save(os.path.join("temp", "WH_Normal_26-52_rotated_altered.jpg"))
     return
 
-def detect_fault_error(subtracted, lum_diff, fault_radius, fault_center, num_pixels_error, lum_diff_error, size_err_by_deg, lum_err_by_deg, rotation_indx, lum_diff_indx, radius_indx):
+def detect_fault_error(subtracted, lum_diff, fault_radius, fault_center, fault_size_error, lum_diff_error, rotation_indx, lum_diff_indx, img, registered, single_channel_orig):
     rows, cols = sizeof(subtracted)
     tmp = subtracted.copy()
 
@@ -399,93 +401,50 @@ def detect_fault_error(subtracted, lum_diff, fault_radius, fault_center, num_pix
     detection_criteria = 50
     isSingleChannel = type(subtracted[0,0]) == np.uint8
     
+    seen = set()
+    detected_lum_diff = 0
+    center_x = 0
+    center_y = 0
+    min_x = rows
+    max_x = 0
+    min_y = cols
+    max_y = 0
+
     for i in range(fault_center[0]-radius_to_check, fault_center[0]+radius_to_check):
         for j in range(fault_center[1]-radius_to_check, fault_center[1]+radius_to_check):
             if (isSingleChannel and tmp[i,j] >= detection_criteria) or (not isSingleChannel and tmp[i,j,0] >= detection_criteria):
-                detected_lum_diff = 0
-                queue = [(i,j)]
-                seen = set([(i,j)])
-                while queue:
-                    x,y = queue.pop(0)
-                    if (isSingleChannel and tmp[x,y] >= detection_criteria) or (not isSingleChannel and tmp[x,y,0] >= detection_criteria):
-                        detected_lum_diff += tmp[x,y]
-                        if isSingleChannel:
-                            tmp[x,y] = 0
-                        else:
-                            tmp[x,y] = [0,0,0]
-                        seen.add((x,y))
-                        if x < rows-1:
-                            queue.append((x+1,y))
-                        if x > 0:
-                            queue.append((x-1,y))
-                        if y < cols-1:
-                            queue.append((x,y+1))
-                        if y > 0:
-                            queue.append((x,y-1))
-                center_x = 0
-                center_y = 0
-                min_x = rows
-                max_x = 0
-                min_y = cols
-                max_y = 0
-                for i,j in seen:
-                    center_x += i
-                    center_y += j
-                    min_x = min(min_x, i)
-                    max_x = max(max_x, i)
-                    min_y = min(min_y, j)
-                    max_y = max(max_y, j)
-                center_x //= len(seen)
-                center_y //= len(seen)
+                seen.add((i,j))
+                center_x += i
+                center_y += j
+                min_x = min(min_x, i)
+                max_x = max(max_x, i)
+                min_y = min(min_y, j)
+                max_y = max(max_y, j)
+                detected_lum_diff += tmp[i,j] if isSingleChannel else tmp[i,j,0]
+    
+    if not seen:
+        print("no fault detected")
+        return
 
-                center_error = (abs(center_x-fault_center[0]), abs(center_y-fault_center[1]))
+    center_x //= len(seen)
+    center_y //= len(seen)
+    center_error = (abs(center_x-fault_center[0]), abs(center_y-fault_center[1]))
 
-                actual_size = (fault_radius*2+1)**2
-                size_error = abs(len(seen) - actual_size) / actual_size
+    actual_size = (fault_radius*2+1)**2
+    size_error = (abs(len(seen) - actual_size) / actual_size) * 100
 
-                # print(len(seen), actual_size, size_error)
-                # if size_error > 100:
-                #     print("========\nsize error too large")
-                #     print("rotation: ", rotation_deg)
-                #     print("lum diff: ", lum_diff)
-                #     print("radius: ", fault_radius)
+    detected_lum_diff /= len(seen)
+    lum_error = (abs(detected_lum_diff - lum_diff) / lum_diff) * 100
 
-                detected_lum_diff /= len(seen)
-                lum_error = abs(detected_lum_diff - lum_diff) / lum_diff
-
-                # (subtracted, lum_diff, fault_radius, fault_center, num_pixels_error, lum_diff_error, size_err_by_deg, lum_err_by_deg, rotation_indx, lum_diff_indx, radius_indx)
-                num_pixels_error[radius_indx] += size_error
-                # lum_diff_error[lum_diff_indx] += lum_error
-                size_err_by_deg[rotation_indx] += size_error
-                lum_err_by_deg[rotation_indx] += lum_error
-                center_x_err_by_deg[rotation_indx] += center_error[0]
-                center_y_err_by_deg[rotation_indx] += center_error[1]
-
-                lum_diff_error[lum_diff_indx].append(lum_error)
-
-                # aspect_ratio = (max_x-min_x+1) / (max_y-min_y+1)
-
-                # print(aspect_ratio)
-
-                # if aspect_ratio < 0.5 or aspect_ratio > 2:
-                #     print("========\naspect ratio too large")
-                #     print("rotation: ", rotation_deg)
-                #     print("lum diff: ", lum_diff)
-                #     print("radius: ", fault_radius)
-                #     print("size error: ", size_error)
-                #     print("lum error: ", lum_error)
-                #     print("center error: ", center_error)
-                #     print("aspect ratio: ", aspect_ratio)
-                #     show_img(subtracted)
-                # return aspect_ratio
-                # if size_error > 40:
-                #     print(len(seen), size_error)
-                #     show_img(subtracted)
-                # print("size error: ", size_error)
-                return
-    # print("no fault detected", rotation_deg, lum_diff, fault_radius)
-    # show_img(tmp)
-    lum_diff_error[lum_diff_indx].append(None)
+    # (subtracted, lum_diff, fault_radius, fault_center, num_pixels_error, lum_diff_error, rotation_indx, lum_diff_indx)
+    
+    lum_diff_error[rotation_indx][lum_diff_indx] = lum_error
+    fault_size_error[rotation_indx][lum_diff_indx] = size_error
+    # if size_error > 50:
+    #     print("size error too large: ", size_error)
+    #     cv2.imshow('orig, perturbed, registered, subtracted', np.hstack([single_channel_orig, img, registered, subtracted]))
+    #     cv2.waitKey(0)
+    #     cv2.destroyAllWindows()
     return 0
 
 def show_img(img, title='title'):
@@ -612,148 +571,94 @@ if __name__ == "__main__":
     # rotated = to_rotate.rotate(15)
     # rotated.save("./post-perturbation/WH_Normal_26-52_rotated_altered.jpg")
 
-    # lum_diff_error = [[0.04, 0.02, 0.12, 0.17, 0.02, 0.09, 0.04, 0.0, 0.04, 0.0, 0.03, 0.1, 0.04888888888888886, 0.1, 0.09, 0.04, 0.14, 0.02, 0.06666666666666671, 0.1, 0.04, 0.06200000000000003, 0.05, 0.14, 0.06], 
-    # [0.058333333333333334, 0.011111111111111072, 0.004166666666666667, 0.1, 0.020833333333333332, 0.06666666666666667, 0.0733333333333333, 0.008333333333333333, 0.0, 0.058333333333333334, 0.0125, 0.02000000000000005, 0.029411764705882366, 0.014814814814814762, 0.029166666666666667, 0.0064102564102564465, 0.015277777777777739, 0.0155555555555555, 0.0309523809523809, 0.027777777777777738, 0.015277777777777739, 0.02948717948717944, 0.08333333333333333, 0.005555555555555595, 0.0037037037037036904, 0.0046875, 0.11666666666666667, 0.11666666666666667, 0.05416666666666667, 0.004166666666666667], 
-    # [0.1, 0.048571428571428654, 0.10816326530612241, 0.1452380952380952, 0.04285714285714286, 0.06190476190476184, 0.18571428571428572, 0.12857142857142856, 0.07142857142857142, 0.03214285714285714, 0.09583333333333337, 0.07959183673469385, 0.03516483516483524, 0.2714285714285714, 0.07619047619047613, 0.22857142857142856, 0.044285714285714206, 0.034285714285714364, 0.0807142857142858, 0.08571428571428572, 0.015476190476190409, 0.09642857142857143, 0.06714285714285718, 0.026530612244898017, 0.09248120300751879, 0.021182266009852162, 0.11428571428571428, 0.047999999999999994, 0.022619047619047553, 0.046031746031746125], 
-    # [0.08214285714285711, 0.184375, 0.1958333333333334, 0.23125, 0.1291666666666666, 0.05625, 0.1375, 0.10892857142857135, 0.15892857142857136, 0.1125, 0.03375000000000004, 0.06785714285714288, 0.10336538461538466, 0.128125, 0.175, 0.10535714285714289, 0.1375, 0.09437499999999996, 0.10738636363636367, 0.08465909090909082, 0.003472222222222143, 0.06400000000000006, 0.2, 0.037837837837837895, 0.0361486486486486, 0.043359375, 0.0625, 0.05, 0.07019230769230766, 0.044642857142857116], 
-    # [0.34444444444444444, 0.36666666666666664, 0.37777777777777777, 0.43333333333333335, 0.1375, 0.16944444444444445, 0.06388888888888888, 0.15555555555555556, 0.17142857142857146, 0.13333333333333333, 0.09555555555555549, 0.15138888888888888, 0.09722222222222222, 0.0933333333333334, 0.01999999999999997, 0.07222222222222222, 0.10092592592592588, 0.28888888888888886, 0.1076923076923077, 0.1368686868686868, 0.3333333333333333, 0.12323232323232326, 0.08212560386473437, 0.14814814814814808, 0.0682539682539682, 0.43333333333333335, 0.13125, 0.045945945945945886, 0.04558404558404558, 0.048387096774193596, 0.04074074074074079, 0.2, 0.07350427350427348, 0.11461988304093561], 
-    # [0.37, 0.36, 0.45, 0.22333333333333327, 0.1875, 0.14400000000000004, 0.205, 0.20099999999999996, 0.1575, 0.165, 0.1966666666666667, 0.1666666666666667, 0.08400000000000006, 0.0325, 0.043333333333333286, 0.08583333333333329, 0.1314285714285714, 0.1363636363636364, 0.08214285714285709, 0.288, 0.11909090909090907, 0.13730769230769227, 0.005, 0.03357142857142861, 0.06923076923076919, 0.1157142857142857, 0.06764705882352942, 0.0830232558139535, 0.1242857142857143, 0.01, 0.1301724137931035, 0.075, 0.10307692307692307]]
     
-    # for i in lum_diff_error:
-    #     print(len(i))
-
-    y_axis_lum_diff = [50, 60, 70, 80, 90, 100]
-
-    test_array = [] # (rotation, fault_radius)
-
-    
-
+    ### Error Analysis of Fault Detection
     # Rotation Parameters (0, 45, 5)
     min_deg = 0
     max_deg = 45
     deg_step = 5
+    num_deg_steps = (max_deg-min_deg) // deg_step + 1
 
     # Perturbation Value Parameters (50, 100, 10)
     min_lum_diff = 50
     max_lum_diff = 100
     lum_diff_step = 10
+    num_lum_steps = (max_lum_diff-min_lum_diff) // lum_diff_step + 1
 
     # Perturbation Size Parameters (0, 3, 1)
     min_fault_radius = 0
     max_fault_radius = 3
     fault_radius_step = 1
+    num_radius_steps = (max_fault_radius-min_fault_radius) // fault_radius_step + 1
     
     # Edge Detection Parameters (30, 45, 3)
     t_lower = 30
     t_upper = 45
     aperture_size = 3
 
-    average_aspect_ratio = 0.0
-
-    num_pixels_x = [(radius*2+1)**2 for radius in range(min_fault_radius, max_fault_radius + 1, fault_radius_step)]
-    num_pixels_error = [0 for _ in range(len(num_pixels_x))]
-
     lum_diff_x = [lum_diff for lum_diff in range(min_lum_diff, max_lum_diff+1, lum_diff_step)]
-    lum_diff_error = [[] for _ in range(len(lum_diff_x))]
-
     rotation_x = [deg for deg in range(min_deg, max_deg+1, deg_step)]
-    size_err_by_deg = [0 for _ in range(len(rotation_x))]
-    lum_err_by_deg = [0 for _ in range(len(rotation_x))]
-    center_x_err_by_deg = [0 for _ in range(len(rotation_x))]
-    center_y_err_by_deg = [0 for _ in range(len(rotation_x))]
+
+    fault_size_error = [[None for _ in range(num_lum_steps)] for _ in range(num_deg_steps)]
+    lum_diff_error = [[None for _ in range(num_lum_steps)] for _ in range(num_deg_steps)]
 
     fault_center = (340, 75)
+    fault_radius = 3
 
-    for lum_diff in range(min_lum_diff, max_lum_diff+1, lum_diff_step):
+    for lum_diff in lum_diff_x:
         lum_diff_indx = (lum_diff // lum_diff_step) - (min_lum_diff // lum_diff_step)
 
-        for fault_radius in range(min_fault_radius, max_fault_radius+1, fault_radius_step):
-            radius_indx = fault_radius // fault_radius_step
+        orig_img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
+        single_channel_orig = orig_img[:, :, 0].copy()
+        orig_edge = cv2.Canny(orig_img, t_lower, t_upper, apertureSize=aperture_size)
 
-            orig_img = cv2.imread(os.path.join("pre-perturbation", "WH_Normal_26-52.jpg"))
-            single_channel_orig = orig_img[:, :, 0]
-            orig_edge = cv2.Canny(orig_img, t_lower, t_upper, apertureSize=aperture_size)
+        img = add_fault(orig_img, fault_center, lum_diff, fault_radius)
+        cv2.imwrite(os.path.join("temp", "WH_Normal_26-52_altered.jpg"), img)
 
-            img = add_fault(orig_img, fault_center, lum_diff, fault_radius)
-            cv2.imwrite(os.path.join("temp", "WH_Normal_26-52_altered.jpg"), img)
+        for rotation_deg in rotation_x:
+            rotation_indx = rotation_deg // deg_step
 
-            for rotation_deg in range(min_deg, max_deg+1, deg_step):
-                rotation_indx = rotation_deg // deg_step
+            rotate_image(os.path.join("temp", "WH_Normal_26-52_altered.jpg"), rotation_deg)
+            rotated = cv2.imread(os.path.join("temp", "WH_Normal_26-52_rotated_altered.jpg"))
+            rotated_edge = cv2.Canny(rotated, t_lower, t_upper, apertureSize=aperture_size)
+            registered = registration(rotated_edge, orig_edge, rotated[:, :, 0])
+            subtracted = cv2.subtract(registered, single_channel_orig)
 
-                rotate_image(os.path.join("temp", "WH_Normal_26-52_altered.jpg"), rotation_deg)
-                rotated = cv2.imread(os.path.join("temp", "WH_Normal_26-52_rotated_altered.jpg"))
-                rotated_edge = cv2.Canny(rotated, t_lower, t_upper, apertureSize=aperture_size)
-                registered = registration(rotated_edge, orig_edge, rotated[:, :, 0])
-                subtracted = cv2.subtract(registered, single_channel_orig)
+            detect_fault_error(subtracted, lum_diff, fault_radius, fault_center, fault_size_error, lum_diff_error, rotation_indx, lum_diff_indx, img[:,:,0], registered, single_channel_orig)
 
-                detect_fault_error(subtracted, lum_diff, fault_radius, fault_center, num_pixels_error, lum_diff_error, size_err_by_deg, lum_err_by_deg, rotation_indx, lum_diff_indx, radius_indx)
-                test_array.append("deg = " + str(rotation_deg) + ", size = " + str((fault_radius*2+1)**2))
-                # print("radius: ", fault_radius, "\nlum diff: ", lum_diff)
-                # detect_faults(subtracted, 50)
+    # print("================================")
+    # print(f"for fault_radius = {fault_radius}")
+    # print("lum_diff_error = [", ", ".join(map(str, lum_diff_error)), "]", sep="")
+    # print("fault_size_error = [", ", ".join(map(str, fault_size_error)), "]", sep="")
+    # print("================================")
 
-    average_aspect_ratio /= 240
-    print("average aspect ratio: ", average_aspect_ratio)
-
-    curr_lum_diff = min_lum_diff
-    for lum_diff_error_list in lum_diff_error:
-        print(curr_lum_diff)
-        # print(lum_diff_error_list)
-        print("lum_diff = [", ", ".join(map(str, lum_diff_error_list)), "]", sep="")
-        curr_lum_diff += lum_diff_step
-
-    print(lum_diff_error)
-    print(lum_diff_x)
-    print(test_array)
-
-    for i in range(len(num_pixels_error)):
-        num_pixels_error[i] /= 60
-        num_pixels_error[i] *= 100
-    for i in range(len(lum_diff_error)):
-        lum_diff_error[i] /= 40
-        lum_diff_error[i] *= 100
-    for i in range(len(size_err_by_deg)):
-        size_err_by_deg[i] /= 24
-        lum_err_by_deg[i] /= 24
-        center_x_err_by_deg[i] /= 24
-        center_y_err_by_deg[i] /= 24
-
-        size_err_by_deg[i] *= 100
-        lum_err_by_deg[i] *= 100
-
-    plt.plot(num_pixels_x, num_pixels_error)
-    plt.xlabel("Fault Size (Pixels)")
-    plt.ylabel("Fault Size Error %")
-    plt.title("Fault Size Error Percentage vs Fault Size")
+    heatmap_lum_diff_error = []
+    for error_set in lum_diff_error:
+        for indv_error in error_set:
+            heatmap_lum_diff_error.append(indv_error)
+    heatmap_fault_size_error = []
+    for error_set in fault_size_error:
+        for indv_error in error_set:
+            heatmap_fault_size_error.append(indv_error)
+    data = {
+        'Luminance Difference Applied': np.tile(lum_diff_x, num_deg_steps),
+        'Degree of Rotation (CCW)': np.repeat(rotation_x, num_lum_steps),
+        'Luminance Difference Error': heatmap_lum_diff_error,
+        'Fault Size Error': heatmap_fault_size_error
+        }
+    num_pixels_changed = (fault_radius*2+1)**2
+    df = pd.DataFrame(data, columns=['Luminance Difference Applied', 'Degree of Rotation (CCW)', 'Luminance Difference Error'])
+    df = df.pivot("Luminance Difference Applied", "Degree of Rotation (CCW)", "Luminance Difference Error")
+    print(df)
+    sns.heatmap(df, annot=True, cmap="copper", vmin=0, vmax=100)
+    plt.title(f"HeatMap of Luminance Difference Error for {fault_radius*2+1}x{fault_radius*2+1} Fault")
     plt.show()
 
-    plt.plot(lum_diff_x, lum_diff_error)
-    plt.xlabel("Luminance Difference")
-    plt.ylabel("Luminance Difference Error %")
-    plt.title("Luminance Difference Error Percentage vs Luminance Difference")
-    plt.show()
-
-    plt.plot(rotation_x, size_err_by_deg)
-    plt.xlabel("Amount of Rotation (Degrees)")
-    plt.ylabel("Avg Fault Size Error %")
-    plt.title("Fault Size Error vs Amount of Rotation")
-    plt.show()
-
-    plt.plot(rotation_x, lum_err_by_deg)
-    plt.xlabel("Amount of Rotation (Degrees)")
-    plt.ylabel("Avg Luminance Difference Error %")
-    plt.title("Luminance Difference Error vs Amount of Rotation")
-    plt.show()
-
-    plt.plot(rotation_x, center_x_err_by_deg)
-    plt.xlabel("Amount of Rotation (Degrees)")
-    plt.ylabel("Horizontal Center Error (Pixels)")
-    plt.title("Horizontal Center Error vs Amount of Rotation")
-    plt.show()
-
-    plt.plot(rotation_x, center_y_err_by_deg)
-    plt.xlabel("Amount of Rotation (Degrees)")
-    plt.ylabel("Vertical Center Error (Pixels)")
-    plt.title("Vertical Center Error vs Amount of Rotation")
+    df = pd.DataFrame(data, columns=['Luminance Difference Applied', 'Degree of Rotation (CCW)', 'Fault Size Error'])
+    df = df.pivot("Luminance Difference Applied", "Degree of Rotation (CCW)", "Fault Size Error")
+    print(df)
+    sns.heatmap(df, annot=True, cmap="copper", vmin=0, vmax=100)
+    plt.title(f"HeatMap of Fault Size Error for a {fault_radius*2+1}x{fault_radius*2+1} Fault")
     plt.show()
     pass
 
